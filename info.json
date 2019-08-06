@@ -1,0 +1,12 @@
+{
+	"name": "OceanDawn",
+	"version": "0.1.0",
+	"title": "Wren's Ocean Exploration",
+	"author": "wrendering",
+	"contact": "",
+	"homepage": "",
+	"factorio_version": "0.17",
+	"dependencies": ["base >= 0.17"],
+	"description": "to do"
+}
+
