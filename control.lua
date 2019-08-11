@@ -7,7 +7,7 @@ end
 
 local boatCreation_on_built_entity = function (e) 
     if e.created_entity.name == "basic-boat" then
-        global.boatsList[e.created_entity.unit_number] = e.created_entity
+        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = false }
         --game.players[1].print("Boat made!  "..e.created_entity.unit_number)
     end
 end
@@ -23,7 +23,10 @@ end
     if e.tick % 120 == 0 then
         game.players[1].print("Hi")
         for i,v in pairs(global.boatsList) do
-            game.players[1].print("Unit: "..tostring(v.unit_number))
+            if math.random() < 0.05 then
+                v.automated = true
+            end
+            game.players[1].print("Automated: "..(v.automated and "true" or "false").."\tUnit: "..tostring(v.entity.unit_number))
         end
     end
 end]]--
@@ -32,15 +35,12 @@ end]]--
 
 local boatDirector_on_tick = function (e) 
     if e.tick % 60 == 0 then
-        if game.players then
-            --game.players[1].print("Current Pos: "..(game.players[1].position.x).."\t"..(game.players[1].position.y) )
-            if game.players[1].vehicle then
-                local boatPos = game.players[1].vehicle.position
+        for _,v in pairs(global.boatsList) do
+            if v.automated then
+                local boatPos = v.entity.position
                 local targetPos = {x = 0, y = 0}
-                --math.pow(boatPos.x - targetPos.x, 2) + math.pow(boatPos.y - targetPos.y, 2) 
-                game.players[1].vehicle.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
 
-                --game.players[1].print("Current 'Angle': "..(math.atan2( (boatPos.y - targetPos.y), (boatPos.x - targetPos.x))) )
+                v.entity.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
             end
         end
     end
@@ -115,7 +115,7 @@ end
 ----------------------------------------------------------- Register Handlers
 
 local on_tick_handler = function(e) 
-    boatPrint_on_tick(e)
+    --boatPrint_on_tick(e)
     boatDirector_on_tick(e)
 end
 script.on_event(defines.events.on_tick, on_tick_handler)
