@@ -1,4 +1,20 @@
 
+
+local boatGui_on_gui_opened = function (e) 
+    if e.entity and e.entity.name == "basic-boat" then
+        game.players[e.player_index].gui.top.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = global.boatsList[e.entity.unit_number].signal })
+    end
+end
+
+local boatGui_on_gui_closed = function (e) 
+    if e.entity and e.entity.name == "basic-boat" then
+        if game.players[e.player_index].gui.top["basicboat_signalpicker"] then 
+            global.boatsList[e.entity.unit_number].signal = game.players[e.player_index].gui.top["basicboat_signalpicker"].elem_value
+            game.players[e.player_index].gui.top["basicboat_signalpicker"].destroy()
+        end
+    end
+end
+
 ----------------------------------------------------------- Boat Globals
 
 if global.boatsList == nil then
@@ -7,7 +23,7 @@ end
 
 local boatCreation_on_built_entity = function (e) 
     if e.created_entity.name == "basic-boat" then
-        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = false }
+        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = false, signal = nil }
         --game.players[1].print("Boat made!  "..e.created_entity.unit_number)
     end
 end
@@ -56,12 +72,13 @@ HARBOR_MOUTH_SEARCH_LENGTH = 6
 
 local oceanOverwriter_on_chunk_generated = function (e)
 
-    for i,v in pairs(e.surface.find_entities(e.area)) do
-        if(v.type ~= nil) then
-            v.destroy()
+    if e.area.right_bottom.x > OCEAN_EFFECT_EDGE then     --could later be changed to a range thing... for now, 1 chunk is fine
+        for i,v in pairs(e.surface.find_entities(e.area)) do
+            if(v.type ~= nil and v.type ~= "character") then
+                v.destroy()
+            end
         end
     end
-
 
     local setOfTiles = {} --local i = 1 ;
     local right_edge ; local left_edge
@@ -70,7 +87,6 @@ local oceanOverwriter_on_chunk_generated = function (e)
         --hopefully, can affect e, and setOfTiles due to closures(?)
         for y = e.area.left_top.y, e.area.right_bottom.y do
             for x = left_edge, right_edge do
-                log(tostring(x).."__"..tostring(y))
                 setOfTiles[tostring(x).."__"..tostring(y)] = { name = tilename, position = { x, y} }
             end
         end
@@ -139,3 +155,13 @@ local on_chunk_generated_handler = function(e)
     oceanOverwriter_on_chunk_generated(e)
 end
 script.on_event(defines.events.on_chunk_generated, on_chunk_generated_handler)
+
+local on_gui_opened_handler = function(e) 
+    boatGui_on_gui_opened(e)
+end
+script.on_event(defines.events.on_gui_opened, on_gui_opened_handler)
+
+local on_gui_closed_handler = function(e) 
+    boatGui_on_gui_closed(e)
+end
+script.on_event(defines.events.on_gui_closed, on_gui_closed_handler)

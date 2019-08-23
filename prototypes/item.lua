@@ -24,7 +24,7 @@ local basicBoat_recipe = {
     name = "basic-boat-recipe",
     enabled = true,
     ingredients = {
-        {'iron-plate',5}, {'copper-plate',5},
+        {'iron-plate',5},
     },
     result = "basic-boat-item",
 }
