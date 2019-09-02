@@ -5,6 +5,106 @@
 -- https://wiki.factorio.com/Prototype/Car
 -- https://github.com/wube/factorio-data/blob/master/base/prototypes/tile/tiles.lua
 
+------------------------ OBJECT lighthouse lighthouse
+
+local lighthouse_entity = {
+    type = "lamp",
+
+    name = "lighthouse-entity",
+    icon = "__base__/graphics/icons/small-lamp.png",
+    icon_size = 32,
+    flags = { "placeable-player", },
+    minable = { mining_time = 3, result = "lighthouse-item", },
+    max_health = 500,
+    corpse = "lamp-remnants",
+    collision_box = {{-1.5, -1.5}, {1.5, 1.5}},
+    selection_box = {{-1.5, -1.5}, {1.5, 1.5}},
+    vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.7 },
+
+    energy_usage_per_tick = "1MW",
+    energy_source = {
+        type = "electric",
+        buffer_capacity = "5MJ",
+        usage_priority = "primary-input",
+        input_flow_limit = "1.5MW",
+    },
+    light = { type = "basic", intensity = 1, size = 15,  color = { r=1.0, g=1.0, b=1.0} },
+    glow_size = 10,
+    glow_color_intensity = 0.25,
+    always_on = true,
+    picture_on  = {
+        layers = {
+            {
+                filename = "__base__/graphics/entity/assembling-machine-2/assembling-machine-2.png",
+                priority = "high",
+                width = 108,
+                height = 119,
+                frame_count = 32,
+                line_length = 8,
+                shift = util.by_pixel(0,-0.5),
+            },
+            {
+                filename = "__base__/graphics/entity/assembling-machine-2/assembling-machine-2-shadow.png",
+                priority = "high",
+                width = 130,
+                height = 82,
+                frame_count = 32,
+                line_length = 8,
+                draw_as_shadow = true,
+                shift = util.by_pixel(28,4),
+            },
+        },
+    },
+
+    picture_off  = {
+        layers = {
+            {
+                filename = "__base__/graphics/entity/assembling-machine-3/assembling-machine-3.png",
+                priority = "high",
+                width = 108,
+                height = 119,
+                frame_count = 32,
+                line_length = 8,
+                shift = util.by_pixel(0,-0.5),
+            },
+            {
+                filename = "__base__/graphics/entity/assembling-machine-3/assembling-machine-3-shadow.png",
+                priority = "high",
+                width = 130,
+                height = 82,
+                frame_count = 32,
+                line_length = 8,
+                draw_as_shadow = true,
+                shift = util.by_pixel(28,4),
+            },
+        },
+    }
+}
+data:extend({lighthouse_entity})
+
+local lighthouse_item = {
+    type = "item",
+    name = "lighthouse-item",
+    icon = "__base__/graphics/icons/beacon.png",
+    icon_size = 32,
+    subgroup = "energy",
+    order = "a[lighthouse]",
+    place_result = "lighthouse-entity",
+    stack_size = 5,
+}
+data:extend({lighthouse_item})
+
+local lighthouse_recipe = {
+    type = "recipe",
+    name = "lighthouse-recipe",
+    enabled = true,
+    ingredients = {
+        {'iron-plate',1},
+    },
+    result = "lighthouse-item",
+}
+data:extend({lighthouse_recipe})
+
 ------------------------ OBJECT basicBoat basic-boat
 
 local basicBoat_entity = table.deepcopy(data.raw["car"]["car"])
@@ -24,7 +124,7 @@ local basicBoat_recipe = {
     name = "basic-boat-recipe",
     enabled = true,
     ingredients = {
-        {'iron-plate',5},
+        {'iron-plate',1},
     },
     result = "basic-boat-item",
 }
