@@ -5,6 +5,90 @@
 -- https://wiki.factorio.com/Prototype/Car
 -- https://github.com/wube/factorio-data/blob/master/base/prototypes/tile/tiles.lua
 
+------------------------ OBJECT buoy buoy
+
+local buoy_entity = {
+    type = "lamp",
+    name = "buoy-entity",
+    icon = "__base__/graphics/icons/small-lamp.png",
+    icon_size = 32,
+    flags = { "placeable-player", },
+    collision_mask = { "object-layer", "player-layer", "ground-tile"},
+    minable = { mining_time = 0.5, result = "buoy-item", },
+    max_health = 40,
+    collision_box = {{-0.4, -0.4}, {0.4, 0.4}},
+    selection_box = {{-0.5, -0.5}, {0.5, 0.5}},
+    energy_usage_per_tick = "10kW",
+    energy_source = { type = "void", },
+    light = { type = "basic", intensity = 1, size = 15,  color = { r=1.0, g=1.0, b=1.0} },
+    glow_size = 10,
+    glow_color_intensity = 0.25,
+    always_on = true,
+    picture_on  = {
+        layers = {
+            {
+                filename = "__base__/graphics/entity/small-lamp/lamp-light.png",
+                priority = "high",
+                width = 46,
+                height = 40,
+                frame_count = 1,
+            },
+            {
+                filename = "__base__/graphics/entity/small-lamp/lamp-shadow.png",
+                priority = "high",
+                width = 36,
+                height = 24,
+                frame_count = 1,
+                draw_as_shadow = true,
+            },
+        },
+    },
+    picture_off  = {
+        layers = {
+            {
+                filename = "__base__/graphics/entity/small-lamp/lamp.png",
+                priority = "high",
+                width = 42,
+                height = 36,
+                frame_count = 1,
+            },
+            {
+                filename = "__base__/graphics/entity/small-lamp/lamp-shadow.png",
+                priority = "high",
+                width = 36,
+                height = 24,
+                frame_count = 1,
+                draw_as_shadow = true,
+            },
+        },
+    },
+}
+data:extend({buoy_entity})
+
+local buoy_item = {
+    type = "item",
+    name = "buoy-item",
+    icon = "__base__/graphics/icons/small-lamp.png",
+    icon_size = 32,
+    subgroup = "energy",
+    order = "a[buoy]",
+    place_result = "buoy-entity",
+    stack_size = 25,
+}
+data:extend({buoy_item})
+
+local buoy_recipe = {
+    type = "recipe",
+    name = "buoy-recipe",
+    enabled = true,
+    ingredients = {
+        {'iron-plate',1},
+    },
+    result = "buoy-item",
+}
+data:extend({buoy_recipe})
+
+
 ------------------------ OBJECT lighthouse lighthouse
 
 local lighthouse_entity = {
@@ -113,7 +197,7 @@ basicBoat_entity.friction = 0.01
 basicBoat_entity.weight = 2000
 basicBoat_entity.guns = nil
 basicBoat_entity.minable.result = "basic-boat-item"
-basicBoat_entity.collision_mask = {"ground-tile", "consider-tile-transitions" }
+basicBoat_entity.collision_mask = {"ground-tile", "player-layer", "consider-tile-transitions" }
 data:extend({basicBoat_entity})
 
 local basicBoat_item = table.deepcopy(data.raw["item-with-entity-data"]["car"])
@@ -161,6 +245,6 @@ local oceanShallow_tile = table.deepcopy(data.raw["tile"]["water"]) -- water-til
 oceanShallow_tile.name = "ocean-shallow-water"
 oceanShallow_tile.tint = {0.2,1,0.9,1}
 oceanShallow_tile.autoplace = nil
-oceanShallow_tile.collision_mask = {"water-tile", "item-layer", "resource-layer", "doodad-layer"}
+oceanShallow_tile.collision_mask = {"water-tile", "resource-layer", "doodad-layer"}
 sub_copyTransitions("water", "ocean-shallow-water")
 data:extend({oceanShallow_tile})
