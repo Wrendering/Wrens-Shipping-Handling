@@ -6,62 +6,58 @@
 -- https://github.com/wube/factorio-data/blob/master/base/prototypes/tile/tiles.lua
 
 ------------------------ OBJECT buoy buoy
-
 local buoy_entity = {
-    type = "lamp",
-    name = "buoy-entity",
-    icon = "__base__/graphics/icons/small-lamp.png",
-    icon_size = 32,
-    flags = { "placeable-player", },
-    collision_mask = { "object-layer", "player-layer", "ground-tile"},
-    minable = { mining_time = 0.5, result = "buoy-item", },
-    max_health = 40,
-    collision_box = {{-0.4, -0.4}, {0.4, 0.4}},
-    selection_box = {{-0.5, -0.5}, {0.5, 0.5}},
-    energy_usage_per_tick = "10kW",
-    energy_source = { type = "void", },
-    light = { type = "basic", intensity = 1, size = 15,  color = { r=1.0, g=1.0, b=1.0} },
-    glow_size = 10,
-    glow_color_intensity = 0.25,
-    always_on = true,
-    picture_on  = {
-        layers = {
-            {
-                filename = "__base__/graphics/entity/small-lamp/lamp-light.png",
-                priority = "high",
-                width = 46,
-                height = 40,
-                frame_count = 1,
-            },
-            {
-                filename = "__base__/graphics/entity/small-lamp/lamp-shadow.png",
-                priority = "high",
-                width = 36,
-                height = 24,
-                frame_count = 1,
-                draw_as_shadow = true,
-            },
-        },
-    },
-    picture_off  = {
-        layers = {
-            {
-                filename = "__base__/graphics/entity/small-lamp/lamp.png",
-                priority = "high",
-                width = 42,
-                height = 36,
-                frame_count = 1,
-            },
-            {
-                filename = "__base__/graphics/entity/small-lamp/lamp-shadow.png",
-                priority = "high",
-                width = 36,
-                height = 24,
-                frame_count = 1,
-                draw_as_shadow = true,
-            },
-        },
-    },
+  type = "beacon",
+  name = "buoy-entity",
+
+  flags = { "placeable-player", },
+  collision_mask = { "object-layer", "player-layer", "ground-tile"},
+  minable = { mining_time = 0.4, result = "buoy-item", },
+  max_health = 500,
+  collision_box = {{-0.3, -0.3}, {0.3, 0.3}},
+  selection_box = {{-0.5, -0.5}, {0.5, 0.5}},
+  energy_usage = "10kW",
+  energy_source = { type = "void", },
+
+  supply_area_distance = 2,
+  distribution_effectivity = 0,
+  module_specification = { module_slots = 0, },
+  allowed_effects = nil,
+
+  corpse = "big-remnants",
+  vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.7 },
+  icon = "__base__/graphics/icons/small-lamp.png",
+  icon_size = 32,
+
+  base_picture = {
+    filename = "__base__/graphics/entity/small-lamp/lamp.png",
+    width = 42,
+    height = 36,
+    --shift = { 0.34375, 0.046875},
+  },
+  animation = {
+    filename = "__base__/graphics/entity/small-lamp/lamp-light.png",
+    width = 46,
+    height = 40,
+    line_length = 1,
+    frame_count = 1,
+    --shift = { -0.03125, -1.71875},
+    animation_speed = 0.5,
+  },
+  animation_shadow = {
+    filename = "__base__/graphics/entity/small-lamp/lamp-shadow.png",
+    width = 38,
+    height = 24,
+    line_length = 1,
+    frame_count = 1,
+    --shift = { 3.140625, 0.484375},
+    animation_speed = 0.5,
+  },
+  radius_visualisation_picture = {
+    filename = "__base__/graphics/entity/beacon/beacon-radius-visualization.png",
+    width = 10,
+    height = 10,
+  },
 }
 data:extend({buoy_entity})
 
@@ -92,77 +88,61 @@ data:extend({buoy_recipe})
 ------------------------ OBJECT lighthouse lighthouse
 
 local lighthouse_entity = {
-    type = "lamp",
-
+    type = "beacon",
     name = "lighthouse-entity",
-    icon = "__base__/graphics/icons/small-lamp.png",
-    icon_size = 32,
+
     flags = { "placeable-player", },
     minable = { mining_time = 3, result = "lighthouse-item", },
     max_health = 500,
-    corpse = "lamp-remnants",
     collision_box = {{-1.5, -1.5}, {1.5, 1.5}},
     selection_box = {{-1.5, -1.5}, {1.5, 1.5}},
-    vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.7 },
-
-    energy_usage_per_tick = "1MW",
+    energy_usage = "1MW",
     energy_source = {
         type = "electric",
         buffer_capacity = "5MJ",
         usage_priority = "primary-input",
         input_flow_limit = "1.5MW",
     },
-    light = { type = "basic", intensity = 1, size = 15,  color = { r=1.0, g=1.0, b=1.0} },
-    glow_size = 10,
-    glow_color_intensity = 0.25,
-    always_on = true,
-    picture_on  = {
-        layers = {
-            {
-                filename = "__base__/graphics/entity/assembling-machine-2/assembling-machine-2.png",
-                priority = "high",
-                width = 108,
-                height = 119,
-                frame_count = 32,
-                line_length = 8,
-                shift = util.by_pixel(0,-0.5),
-            },
-            {
-                filename = "__base__/graphics/entity/assembling-machine-2/assembling-machine-2-shadow.png",
-                priority = "high",
-                width = 130,
-                height = 82,
-                frame_count = 32,
-                line_length = 8,
-                draw_as_shadow = true,
-                shift = util.by_pixel(28,4),
-            },
-        },
-    },
 
-    picture_off  = {
-        layers = {
-            {
-                filename = "__base__/graphics/entity/assembling-machine-3/assembling-machine-3.png",
-                priority = "high",
-                width = 108,
-                height = 119,
-                frame_count = 32,
-                line_length = 8,
-                shift = util.by_pixel(0,-0.5),
-            },
-            {
-                filename = "__base__/graphics/entity/assembling-machine-3/assembling-machine-3-shadow.png",
-                priority = "high",
-                width = 130,
-                height = 82,
-                frame_count = 32,
-                line_length = 8,
-                draw_as_shadow = true,
-                shift = util.by_pixel(28,4),
-            },
-        },
-    }
+    supply_area_distance = 15,
+    distribution_effectivity = 0,
+    module_specification = { module_slots = 0, },
+    allowed_effects = nil,
+
+    corpse = "big-remnants",
+    vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.7 },
+
+    icon = "__base__/graphics/icons/small-lamp.png",
+    icon_size = 32,
+    base_picture = {
+      filename = "__base__/graphics/entity/beacon/beacon-base.png",
+      width = 116,
+      height = 93,
+      shift = { 0.34375, 0.046875},
+    },
+    animation = {
+      filename = "__base__/graphics/entity/beacon/beacon-antenna.png",
+      width = 54,
+      height = 50,
+      line_length = 8,
+      frame_count = 32,
+      shift = { -0.03125, -1.71875},
+      animation_speed = 0.5,
+    },
+    animation_shadow = {
+      filename = "__base__/graphics/entity/beacon/beacon-antenna-shadow.png",
+      width = 63,
+      height = 49,
+      line_length = 8,
+      frame_count = 32,
+      shift = { 3.140625, 0.484375},
+      animation_speed = 0.5,
+    },
+    radius_visualisation_picture = {
+      filename = "__base__/graphics/entity/beacon/beacon-radius-visualization.png",
+      width = 10,
+      height = 10,
+    },
 }
 data:extend({lighthouse_entity})
 
