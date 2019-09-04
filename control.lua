@@ -1,21 +1,4 @@
-
-
-local boatGui_on_gui_opened = function (e)
-    if e.entity and e.entity.name == "basic-boat" then
-        game.players[e.player_index].gui.top.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = global.boatsList[e.entity.unit_number].signal })
-    end
-end
-
-local boatGui_on_gui_closed = function (e)
-    if e.entity and e.entity.name == "basic-boat" then
-        if game.players[e.player_index].gui.top["basicboat_signalpicker"] then
-            global.boatsList[e.entity.unit_number].signal = game.players[e.player_index].gui.top["basicboat_signalpicker"].elem_value
-            game.players[e.player_index].gui.top["basicboat_signalpicker"].destroy()
-        end
-    end
-end
-
------------------------------------------------------------ Boat Globals
+----------------------------------------------------------- Boat and Lighthouse Globals
 
 if global.boatsList == nil then
     global.boatsList = {}
@@ -23,40 +6,180 @@ end
 
 local boatCreation_on_built_entity = function (e)
     if e.created_entity.name == "basic-boat" then
-        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = false, signal = nil }
-        --game.players[1].print("Boat made!  "..e.created_entity.unit_number)
+        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = true, signal = nil }
     end
 end
 
 local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
     if e.entity.name == "basic-boat" then
         global.boatsList[e.entity.unit_number] = nil
-        --game.players[1].print("Boat destroyed!  "..e.entity.unit_number)
     end
 end
 
---[[local boatPrint_on_tick = function (e)
-    if e.tick % 120 == 0 then
-        game.players[1].print("Hi")
-        for i,v in pairs(global.boatsList) do
-            if math.random() < 0.05 then
-                v.automated = true
+if global.lighthousesList == nil then
+    global.lighthousesList = {}
+end
+
+if global.lighthousesList_signalOrdered == nil then
+    global.lighthousesList_signalOrdered = {}
+end
+
+local lighthouseCreation_on_built_entity = function (e)
+    if e.created_entity.name == "lighthouse-entity" then
+        global.lighthousesList[e.created_entity.unit_number] = { entity = e.created_entity, signal = nil }
+    end
+end
+
+local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
+    if e.entity.name == "lighthouse-entity" then
+        local lostSignal = global.lighthousesList[e.entity.unit_number].signal
+        if lostSignal ~= nil then
+          global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
+          if next(global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
+        end
+        global.lighthousesList[e.entity.unit_number] = nil
+
+    end
+end
+
+
+----------------------------------------------------------- Boat and Lighthouse GUI picker handling
+
+
+local boatGui_on_gui_opened = function (e)
+  if e.entity and e.entity.name == "basic-boat" then
+      local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = "basicboat_frame", caption = "Boat Configuration", direction = "vertical" })
+      local gui_auttab = gui_base.add({type = "table", name = "basicboat_automated_table", column_count = 2 })
+      local gui_sigtab = gui_base.add({type = "table", name = "basicboat_signalpicker_table", column_count = 2 })
+      gui_auttab.add({type = "label", caption = "Automation Enabled: "})
+      gui_auttab.add({type = "checkbox", name = "basicboat_automated", state = global.boatsList[e.entity.unit_number].automated})
+      gui_sigtab.add({type = "label", caption = "Automation Target Signal: "})
+      gui_sigtab.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = global.boatsList[e.entity.unit_number].signal })
+  end
+end
+
+local boatGui_on_gui_closed = function (e)
+  if e.entity and e.entity.name == "basic-boat" then
+    if game.players[e.player_index].gui.top["basicboat_frame"] then
+      local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
+
+      if gui_base["basicboat_signalpicker_table"]["basicboat_signalpicker"] then
+        global.boatsList[e.entity.unit_number].signal = gui_base["basicboat_signalpicker_table"]["basicboat_signalpicker"].elem_value
+      end
+
+      if gui_base["basicboat_automated_table"]["basicboat_automated"] then
+        repeat
+          local newAutomated = gui_base["basicboat_automated_table"]["basicboat_automated"].state
+          if global.boatsList[e.entity.unit_number].automated ~= newAutomated then
+            if newAutomated then
+              if(e.entity.get_driver()) then
+                if(e.entity.get_driver().player ~= nil) then
+                  if(e.entity.get_passenger() ~= nil and e.entity.get_passenger().player ~= nil) then
+                    game.players[e.player_index].print("WARNING: Can't set boat to automated while it has a driver.")
+                    break
+                  else
+                    e.entity.set_passenger(e.entity.get_driver())
+                  end
+                end
+              end
+              e.entity.set_driver(nil)
+              e.entity.set_driver(e.entity.surface.create_entity({ name = "character", position = e.entity.position, force = game.forces.player}))
+            else
+              if(e.entity.get_driver() ~= nil and e.entity.get_driver().player ~= nil) then
+                game.players[e.player_index].print("ERROR: Please tell mod author 2") --how did this happen?
+              end
+              if e.entity.get_driver() then e.entity.get_driver().destroy() end
+              e.entity.set_driver(nil)
+              if e.entity.get_passenger() and e.entity.get_passenger().player then
+                e.entity.set_driver(e.entity.get_passenger())
+                e.entity.set_passenger(nil)
+              end
             end
-            game.players[1].print("Automated: "..(v.automated and "true" or "false").."\tUnit: "..tostring(v.entity.unit_number))
+            global.boatsList[e.entity.unit_number].automated = newAutomated
+          end
+        until(true)
+      end
+
+      game.players[e.player_index].gui.top["basicboat_frame"].destroy()
+    end
+  end
+end
+
+local lighthouseGui_on_gui_opened = function (e)
+  if e.entity and e.entity.name == "lighthouse-entity" then
+    local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = "lighthouse_frame", caption = "Lighthouse Configuration", direction = "vertical" })
+    local gui_auttab = gui_base.add({type = "table", name = "lighthouse_signalpicker_table", column_count = 2 })
+    gui_auttab.add({type = "label", caption = "Lighthouse Signal: "})
+    gui_auttab.add({type = "choose-elem-button", name = "lighthouse_signalpicker", elem_type = "signal", signal = global.lighthousesList[e.entity.unit_number].signal })
+  end
+end
+
+local lighthouseGui_on_gui_closed = function (e)
+    if e.entity and e.entity.name == "lighthouse-entity" then
+        if game.players[e.player_index].gui.top["lighthouse_frame"] then
+            local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
+
+            local oldSignalVal = global.lighthousesList[e.entity.unit_number].signal
+            local newSignalVal = gui_base["lighthouse_signalpicker_table"]["lighthouse_signalpicker"].elem_value
+
+            if oldSignalVal ~= nil then
+              global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name][e.entity.unit_number] = nil
+              if next(global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name]) == nil then global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name] = nil end
+            end
+            if newSignalVal ~= nil then
+              if not global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] then global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] = {} end
+              global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name][e.entity.unit_number] = true
+            end
+            global.lighthousesList[e.entity.unit_number].signal = newSignalVal
+
+            gui_base.destroy()
         end
     end
-end]]--
+end
 
------------------------------------------------------------ Boat Movement
+
+----------------------------------------------------------- Boat Movement and Control
+
+local boatSetup_on_built_entity = function (e)
+  if(e.created_entity.name == "basic-boat") then
+    e.created_entity.set_driver(e.created_entity.surface.create_entity({ name = "character", position = e.created_entity.position, force = game.forces.player}))
+  end
+end
 
 local boatDirector_on_tick = function (e)
     if e.tick % 60 == 0 then
         for _,v in pairs(global.boatsList) do
-            if v.automated then
+            if v.automated and (v.entity.burner.currently_burning or not v.entity.get_fuel_inventory().is_empty()) then
                 local boatPos = v.entity.position
-                local targetPos = {x = 0, y = 0}
+                if v.signal ~= nil and global.lighthousesList_signalOrdered[v.signal.type..v.signal.name] ~= nil then
 
-                v.entity.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
+                  local targetPos = nil
+                  local potentialTarget = nil
+                  local targetDistance = nil
+
+                  for k,_ in pairs(global.lighthousesList_signalOrdered[v.signal.type..v.signal.name]) do
+                    potentialTarget = global.lighthousesList[k].entity.position
+                    if targetPos == nil then
+                      targetPos = potentialTarget
+                    else
+                      targetDistance = targetDistance or (targetPos.x - boatPos.x)^2 + (targetPos.y - boatPos.y)^2
+                      if (boatPos.x - potentialTarget.x)^2 + (boatPos.y - potentialTarget.y)^2 < targetDistance then
+                        targetPos = potentialTarget
+                      end
+                    end
+                  end
+                  if targetPos ~= nil then
+                    v.entity.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
+                    v.entity.riding_state = {acceleration = defines.riding.acceleration.accelerating, direction = defines.riding.direction.straight }
+                  end
+                else
+                  if v.entity.speed < 0.01 then
+                    v.entity.speed = 0
+                    v.entity.riding_state = {acceleration = defines.riding.acceleration.nothing, direction = defines.riding.direction.straight }
+                  else
+                    v.entity.riding_state = {acceleration = defines.riding.acceleration.braking, direction = defines.riding.direction.straight }
+                  end
+                end
             end
         end
     end
@@ -138,16 +261,20 @@ script.on_event(defines.events.on_tick, on_tick_handler)
 
 local on_built_entity_handler = function(e)
     boatCreation_on_built_entity(e)
+    boatSetup_on_built_entity(e)
+    lighthouseCreation_on_built_entity(e)
 end
 script.on_event(defines.events.on_built_entity, on_built_entity_handler)
 
 local on_entity_died_handler = function(e)
     boatDestruction_on_entity_died_on_player_mined_entity(e)
+    lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
 end
 script.on_event(defines.events.on_entity_died, on_entity_died_handler)
 
 local on_player_mined_entity_handler = function(e)
     boatDestruction_on_entity_died_on_player_mined_entity(e)
+    lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
 end
 script.on_event(defines.events.on_player_mined_entity, on_player_mined_entity_handler)
 
@@ -158,10 +285,12 @@ script.on_event(defines.events.on_chunk_generated, on_chunk_generated_handler)
 
 local on_gui_opened_handler = function(e)
     boatGui_on_gui_opened(e)
+    lighthouseGui_on_gui_opened(e)
 end
 script.on_event(defines.events.on_gui_opened, on_gui_opened_handler)
 
 local on_gui_closed_handler = function(e)
     boatGui_on_gui_closed(e)
+    lighthouseGui_on_gui_closed(e)
 end
 script.on_event(defines.events.on_gui_closed, on_gui_closed_handler)

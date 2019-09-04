@@ -109,6 +109,8 @@ data:extend({lighthouse_recipe})
 
 local basicBoat_entity = table.deepcopy(data.raw["car"]["car"])
 basicBoat_entity.name = "basic-boat"
+basicBoat_entity.friction = 0.01
+basicBoat_entity.weight = 2000
 basicBoat_entity.guns = nil
 basicBoat_entity.minable.result = "basic-boat-item"
 basicBoat_entity.collision_mask = {"ground-tile", "consider-tile-transitions" }
