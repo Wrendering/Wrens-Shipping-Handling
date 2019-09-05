@@ -1,3 +1,21 @@
+
+------------------------------------------------ Dock Placement
+
+local dockPlacement_on_built_entity = function (e)
+  if e.created_entity.name == "dock-entity" then
+    if next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.left_top.x - 1, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.left_top.x, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"water-tile",}, })) ~= nil then
+      game.players[e.player_index].print("ERROR: Dock must be placed with back to land.")
+    elseif next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.right_bottom.x, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.right_bottom.x + 1, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"ground-tile",}, })) ~= nil then
+      game.players[e.player_index].print("ERROR: Dock must be placed with front to water.")
+    else
+      return
+    end
+    game.players[e.player_index].insert(e.stack)
+    e.created_entity.destroy()
+  end
+end
+
+
 ----------------------------------------------------------- Boat and Lighthouse Globals
 
 if global.boatsList == nil then
@@ -202,6 +220,7 @@ local oceanOverwriter_on_chunk_generated = function (e)
             end
         end
     end
+    e.surface.destroy_decoratives({area = e.area})
 
     local setOfTiles = {} --local i = 1 ;
     local right_edge ; local left_edge
@@ -263,6 +282,7 @@ local on_built_entity_handler = function(e)
     boatCreation_on_built_entity(e)
     boatSetup_on_built_entity(e)
     lighthouseCreation_on_built_entity(e)
+    dockPlacement_on_built_entity(e)
 end
 script.on_event(defines.events.on_built_entity, on_built_entity_handler)
 

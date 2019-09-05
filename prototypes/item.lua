@@ -5,12 +5,96 @@
 -- https://wiki.factorio.com/Prototype/Car
 -- https://github.com/wube/factorio-data/blob/master/base/prototypes/tile/tiles.lua
 
+------------------------ OBJECT dock dock
+
+local dock_entity = {
+  type = "beacon",
+  name = "dock-entity",
+
+  rotatable = true,
+  flags = {"placeable-player", },
+  collision_mask = {"ground-tile", "object-layer"},
+  order = "b-dock",
+  minable = { mining_time = 2, result = "dock-item", },
+  max_health = 500,
+  collision_box = {{-1.0, -1.5}, {0.2, 1.5}},
+  selection_box = {{-1.0, -1.5}, {0.2, 1.5}},
+  energy_usage = "10kW",
+  energy_source = { type = "void", },
+
+  supply_area_distance = 1,
+  distribution_effectivity = 0,
+  module_specification = { module_slots = 0, },
+  allowed_effects = nil,
+
+  corpse = "medium-remnants",
+  vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.2 },
+  icon = "__base__/graphics/icons/small-lamp.png",
+  icon_size = 32,
+
+  base_picture = {
+    filename = "__OceanDawn__/graphics/entity/dock/bad_dock.png",
+    width = 64,
+    height = 96,
+    shift = { 0.0, 0.0},
+  },
+  animation = {
+    filename = "__OceanDawn__/graphics/entity/dock/bad_dock.png",
+    width = 64 ,
+    height = 96,
+    --line_length = 1,
+    frame_count = 1,
+    shift = { 0.0, 0.0},
+    --animation_speed = 0.5,
+  },
+  animation_shadow = {
+    filename = "__OceanDawn__/graphics/entity/dock/bad_dock_shadow.png",
+    width = 35,
+    height = 30,
+    --line_length = 1,
+    frame_count = 1,
+    shift = { 0.0, 0.0},
+    --animation_speed = 0.5,
+  },
+  radius_visualisation_picture = {
+    filename = "__base__/graphics/entity/beacon/beacon-radius-visualization.png",
+    width = 10,
+    height = 10,
+  },
+
+}
+data:extend({dock_entity})
+
+local dock_item = {
+    type = "item",
+    name = "dock-item",
+    icon = "__base__/graphics/icons/wreckage-reactor.png",
+    icon_size = 32,
+    subgroup = "energy",
+    order = "a[buoy]",
+    place_result = "dock-entity",
+    stack_size = 25,
+}
+data:extend({dock_item})
+
+local dock_recipe = {
+    type = "recipe",
+    name = "dock-recipe",
+    enabled = true,
+    ingredients = {
+        {'iron-plate',1},
+    },
+    result = "dock-item",
+}
+data:extend({dock_recipe})
+
 ------------------------ OBJECT buoy buoy
 local buoy_entity = {
   type = "beacon",
   name = "buoy-entity",
 
   flags = { "placeable-player", },
+  order = "b-buoy",
   collision_mask = { "object-layer", "player-layer", "ground-tile"},
   minable = { mining_time = 0.4, result = "buoy-item", },
   max_health = 500,
@@ -19,13 +103,13 @@ local buoy_entity = {
   energy_usage = "10kW",
   energy_source = { type = "void", },
 
-  supply_area_distance = 2,
+  supply_area_distance = 1,
   distribution_effectivity = 0,
   module_specification = { module_slots = 0, },
   allowed_effects = nil,
 
-  corpse = "big-remnants",
-  vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.7 },
+  corpse = "small-remnants",
+  vehicle_impact_sound = { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.2 },
   icon = "__base__/graphics/icons/small-lamp.png",
   icon_size = 32,
 
@@ -92,6 +176,7 @@ local lighthouse_entity = {
     name = "lighthouse-entity",
 
     flags = { "placeable-player", },
+    order = "b-lighthouse",
     minable = { mining_time = 3, result = "lighthouse-item", },
     max_health = 500,
     collision_box = {{-1.5, -1.5}, {1.5, 1.5}},
@@ -199,7 +284,7 @@ data:extend({basicBoat_recipe})
 ------------------------ TILEs oceanWater ocean-deep-water | oceanShallow ocean-shallow-water
 
 local sub_copyTransitions = function (fromTile, toTile)
-    for _, tile in pairs(data.raw.tile) do  --#thankyouAlienBiomes
+    for _, tile in pairs(data.raw.tile) do
         if tile.transitions then
             for _, transition in pairs(tile.transitions) do
                 if transition.to_tiles then
@@ -218,6 +303,7 @@ local oceanWater_tile = table.deepcopy(data.raw["tile"]["deepwater"])
 oceanWater_tile.name = "ocean-deep-water"
 oceanWater_tile.tint = {0.2,1,0.9,1}
 oceanWater_tile.autoplace = nil
+table.insert(oceanWater_tile.collision_mask, "doodad-layer")
 sub_copyTransitions("deepwater", "ocean-deep-water")
 data:extend({oceanWater_tile})
 
@@ -225,6 +311,6 @@ local oceanShallow_tile = table.deepcopy(data.raw["tile"]["water"]) -- water-til
 oceanShallow_tile.name = "ocean-shallow-water"
 oceanShallow_tile.tint = {0.2,1,0.9,1}
 oceanShallow_tile.autoplace = nil
-oceanShallow_tile.collision_mask = {"water-tile", "resource-layer", "doodad-layer"}
+oceanShallow_tile.collision_mask = {"water-tile", "resource-layer"}
 sub_copyTransitions("water", "ocean-shallow-water")
 data:extend({oceanShallow_tile})
