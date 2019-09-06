@@ -22,9 +22,29 @@ if global.boatsList == nil then
     global.boatsList = {}
 end
 
+
+--A boat's conditions table contains tables of tables including a "type" and "value" field.
+-- types are "conditionIndex", "logic", "numberValue", and "signalValue"
+--Pass in: time, numberValue, signalValue, boat
+local conditionTable = {
+  ["A"] = { description = "Leave Immediately", defaultValue = nil, defaultSignal = nil, finished = function(...) return true end },
+  ["B"] = { description = "Wait Until _ Seconds Elapsed", defaultValue = 5, defaultSignal = nil, finished = function(...) return (arg.time >= arg.numberValue) end },
+  ["C"] = { description = "Boat Full", defaultValue = nil, defaultSignal = nil, finished = function(...) return arg.boat.get_inventory(defines.inventory.car_trunk).can_insert("rocket-silo") end },
+  ["D"] = { description = "Boat Empty", defaultValue = nil, defaultSignal = nil, finished = function(...) return arg.boat.get_inventory(defines.inventory.car_trunk).is_empty() end },
+}
+
 local boatCreation_on_built_entity = function (e)
     if e.created_entity.name == "basic-boat" then
-        global.boatsList[e.created_entity.unit_number] = { entity = e.created_entity, automated = true, signal = nil }
+        global.boatsList[e.created_entity.unit_number] = {
+          entity = e.created_entity,
+          automated = true,
+          signal = nil,
+          selected_condition_index = 0,
+          conditions = {
+            [1] = { [1] = { type = "conditionIndex", value = "A", }, [2] = { type = "logic", value = "AND", }, [3] = { type = "conditionIndex", value = "C", } },
+            [2] = { [1] = { type = "conditionIndex", value = "B", }, [2] = { type = "numberValue", value = "5", }, [3] = { type = "conditionIndex", value = "D", }, [4] = { type = "signalValue", value = {type = "item", name = "iron-plate"}, } },
+          }
+        }
     end
 end
 
@@ -66,57 +86,100 @@ end
 
 local boatGui_on_gui_opened = function (e)
   if e.entity and e.entity.name == "basic-boat" then
-      local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = "basicboat_frame", caption = "Boat Configuration", direction = "vertical" })
-      local gui_auttab = gui_base.add({type = "table", name = "basicboat_automated_table", column_count = 2 })
-      local gui_sigtab = gui_base.add({type = "table", name = "basicboat_signalpicker_table", column_count = 2 })
-      gui_auttab.add({type = "label", caption = "Automation Enabled: "})
-      gui_auttab.add({type = "checkbox", name = "basicboat_automated", state = global.boatsList[e.entity.unit_number].automated})
-      gui_sigtab.add({type = "label", caption = "Automation Target Signal: "})
-      gui_sigtab.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = global.boatsList[e.entity.unit_number].signal })
+    local boat_data = global.boatsList[e.entity.unit_number]
+
+    local kludge = game.players[e.player_index].gui.top.add({ type = "flow", name = "basicboat_frame", direction = "vertical" })
+    local gui_base = kludge.add({type = "frame", name = "basicboat_id_"..(e.entity.unit_number), caption = "Boat Configuration", direction = "vertical" })
+    local gui_auttab = gui_base.add({type = "table", name = "basicboat_automated_table", column_count = 2 })
+    local gui_sigtab = gui_base.add({type = "table", name = "basicboat_signalpicker_table", column_count = 2 })
+    gui_auttab.add({type = "label", caption = "Automation Enabled: "})
+    gui_auttab.add({type = "checkbox", name = "basicboat_automated", state = boat_data.automated})
+    gui_sigtab.add({type = "label", caption = "Automation Target Signal: "})
+    gui_sigtab.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = boat_data.signal })
+
+    --local gui_condition_base_base = gui_base.add({ type = "scroll-pane", name = "basicboat_condition_condition", vertical_scroll_policy = "always", })--horizontal_scroll_policy = "never" })
+--[[    local gui_condition_base = gui_base.add({ type = "scroll-pane", name = "basicboat_condition"})
+    for i,condition in pairs(boat_data.conditions) do
+      local gui_current_condition = gui_condition_base.add({ type = "flow", name = ("basicboat_condition_"..i), direction = "horizontal"})
+      local j = 0
+      for _,subcondition in ipairs(condition) do
+        if subcondition.type == "conditionIndex" then
+          gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = conditionTable[subcondition.value].description,  })
+        elseif subcondition.type == "logic" then
+          gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = subcondition.value })
+        elseif subcondition.type == "numberValue" then
+          gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = subcondition.value })
+        elseif subcondition.type == "signalValue" then
+          gui_current_condition.add({ type = "choose-elem-button", name = "basicboat_condition_label_"..j, elem_type = "signal", signal = subcondition.value })
+        else
+          --throw an error of some kind, this shouldn't happen
+        end
+        j = j + 1
+      end
+      gui_current_condition.add({type = "button", name = "basicboat_condition_label_"..j, caption = "+"})
+    end]]--
+
+
+  end
+end
+
+local boatGui_on_gui_checked_state_changed = function(e)
+  if e.element.name == "basicboat_automated" then
+    local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
+    gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
+    local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
+    local entity = global.boatsList[unitNumber].entity
+    --repeat
+      local newAutomated = gui_base["basicboat_automated_table"]["basicboat_automated"].state
+      if global.boatsList[unitNumber].automated ~= newAutomated then
+        if newAutomated then
+          if(entity.get_driver()) then
+            if(entity.get_driver().player ~= nil) then
+              if(entity.get_passenger() ~= nil and entity.get_passenger().player ~= nil) then
+                game.players[e.player_index].print("WARNING: Can't set boat to automated while it has a driver.")
+                e.element.state = not e.element.state
+                return
+                --break
+              else
+                entity.set_passenger(entity.get_driver())
+              end
+            end
+          end
+          entity.set_driver(nil)
+          entity.set_driver(entity.surface.create_entity({ name = "character", position = entity.position, force = game.forces.player}))
+        else
+          if(entity.get_driver() ~= nil and entity.get_driver().player ~= nil) then
+            game.players[e.player_index].print("ERROR: Please tell mod author 2") --how did this happen?
+          end
+          if entity.get_driver() then entity.get_driver().destroy() end
+          entity.set_driver(nil)
+          if entity.get_passenger() and entity.get_passenger().player then
+            entity.set_driver(entity.get_passenger())
+            entity.set_passenger(nil)
+          end
+        end
+        global.boatsList[unitNumber].automated = newAutomated
+      end
+    return
+    --until(true)
+  end
+end
+
+local boatGui_on_gui_elem_changed = function (e)
+  if e.element.name == "basicboat_signalpicker" then
+    local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
+    gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
+    local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
+
+    global.boatsList[unitNumber].signal = e.element.elem_value
   end
 end
 
 local boatGui_on_gui_closed = function (e)
   if e.entity and e.entity.name == "basic-boat" then
     if game.players[e.player_index].gui.top["basicboat_frame"] then
-      local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
-
-      if gui_base["basicboat_signalpicker_table"]["basicboat_signalpicker"] then
-        global.boatsList[e.entity.unit_number].signal = gui_base["basicboat_signalpicker_table"]["basicboat_signalpicker"].elem_value
-      end
-
-      if gui_base["basicboat_automated_table"]["basicboat_automated"] then
-        repeat
-          local newAutomated = gui_base["basicboat_automated_table"]["basicboat_automated"].state
-          if global.boatsList[e.entity.unit_number].automated ~= newAutomated then
-            if newAutomated then
-              if(e.entity.get_driver()) then
-                if(e.entity.get_driver().player ~= nil) then
-                  if(e.entity.get_passenger() ~= nil and e.entity.get_passenger().player ~= nil) then
-                    game.players[e.player_index].print("WARNING: Can't set boat to automated while it has a driver.")
-                    break
-                  else
-                    e.entity.set_passenger(e.entity.get_driver())
-                  end
-                end
-              end
-              e.entity.set_driver(nil)
-              e.entity.set_driver(e.entity.surface.create_entity({ name = "character", position = e.entity.position, force = game.forces.player}))
-            else
-              if(e.entity.get_driver() ~= nil and e.entity.get_driver().player ~= nil) then
-                game.players[e.player_index].print("ERROR: Please tell mod author 2") --how did this happen?
-              end
-              if e.entity.get_driver() then e.entity.get_driver().destroy() end
-              e.entity.set_driver(nil)
-              if e.entity.get_passenger() and e.entity.get_passenger().player then
-                e.entity.set_driver(e.entity.get_passenger())
-                e.entity.set_passenger(nil)
-              end
-            end
-            global.boatsList[e.entity.unit_number].automated = newAutomated
-          end
-        until(true)
-      end
+      --local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
+      --gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
 
       game.players[e.player_index].gui.top["basicboat_frame"].destroy()
     end
@@ -314,3 +377,13 @@ local on_gui_closed_handler = function(e)
     lighthouseGui_on_gui_closed(e)
 end
 script.on_event(defines.events.on_gui_closed, on_gui_closed_handler)
+
+local on_gui_checked_state_changed_handler = function(e)
+    boatGui_on_gui_checked_state_changed(e)
+end
+script.on_event(defines.events.on_gui_checked_state_changed, on_gui_checked_state_changed_handler)
+
+local on_gui_elem_changed_handler = function(e)
+  boatGui_on_gui_elem_changed(e)
+end
+script.on_event(defines.events.on_gui_elem_changed, on_gui_elem_changed_handler)
