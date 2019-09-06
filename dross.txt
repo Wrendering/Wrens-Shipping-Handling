@@ -1,0 +1,44 @@
+
+      if gui_base["basicboat_condition"] then
+        local maxIndices = {}
+        for _,i in pairs(gui_base["basicboat_condition"].children_names) do
+          if string.find(i, "basicboat_condition_") ~= nil then
+            local maxIndex = 0
+              for _,v in pairs(gui_base["basicboat_condition"][i].children_names) do
+                if string.find(v, "basicboat_condition_label_") ~= nil then
+                  local trymax = tonumber(string.gsub(v, "basicboat_condition_label_", ""), 10)
+                  if trymax > maxIndex then maxIndex = trymax end
+                end
+              end
+            maxIndices[tonumber(string.gsub(i, "basicboat_condition_", ""), 10)] = maxIndex
+          end
+        end
+
+        local newConditions = {}
+        for i,j in ipairs(maxIndices) do
+          newConditions[i] = {}
+          for k=1,i do
+            local label = gui_base["basicboat_condition"]["basicboat_condition_"..j]["basicboat_condition_label_"..k]
+            if label.type == "choose-elem-button" then
+              newConditions[i][k] = { type = "signalValue", value = label.elem_value }
+            elseif
+          end
+        end
+
+        for i,condition in pairs(boat_data.conditions) do
+          local gui_current_condition = gui_condition_base.add({ type = "flow", name = ("basicboat_condition_"..i), direction = "horizontal"})
+          local j = 0
+          for _,subcondition in ipairs(condition) do
+            if subcondition.type == "conditionIndex" then
+              gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = conditionTable[subcondition.value].description,  })
+            elseif subcondition.type == "logic" then
+              gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = subcondition.value })
+            elseif subcondition.type == "numberValue" then
+              gui_current_condition.add({ type = "button", name = "basicboat_condition_label_"..j, caption = subcondition.value })
+            elseif subcondition.type == "signalValue" then
+              gui_current_condition.add({ type = "choose-elem-button", name = "basicboat_condition_label_"..j, elem_type = "signal", signal = subcondition.value })
+            else
+              --throw an error of some kind, this shouldn't happen
+            end
+            j = j + 1
+          end
