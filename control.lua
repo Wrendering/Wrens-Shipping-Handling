@@ -26,14 +26,15 @@ end
 --A boat's conditions table contains tables of tables including a "type" and "value" field.
 -- types are "conditionIndex", "logic", "numberValue", and "signalValue"
 --Pass in: time, numberValue, signalValue, boat
+-- VERY IMPORTANT: subconditions go numberValue -> signalValue, if a subcondition requires both
 local logicTable = {
-  [1] = "AND", [2] = "OR", [3] = "NOT"
+  [1] = "AND", [2] = "OR", [3] = "XOR", --[4] = "NOR", [5] = "XOR",
 }
 
 local conditionTable = {
   [1] = { description = "Leave Immediately", defaultValue = nil, defaultSignal = nil, finished = function(...) return true end },
   [2] = { description = "Wait Until _ Seconds Elapsed", defaultValue = 5, defaultSignal = nil, finished = function(...) return (arg.time >= arg.numberValue) end },
-  [3] = { description = "Boat Full", defaultValue = nil, defaultSignal = nil, finished = function(...) return arg.boat.get_inventory(defines.inventory.car_trunk).can_insert("rocket-silo") end },
+  [3] = { description = "Boat Full", defaultValue = 5, defaultSignal = { type = "item", name = "iron-plate"}, finished = function(...) return arg.boat.get_inventory(defines.inventory.car_trunk).can_insert("rocket-silo") end },
   [4] = { description = "Boat Empty", defaultValue = nil, defaultSignal = nil, finished = function(...) return arg.boat.get_inventory(defines.inventory.car_trunk).is_empty() end },
 }
 
@@ -45,8 +46,8 @@ local boatCreation_on_built_entity = function (e)
           signal = nil,
           selected_condition_index = 1,
           conditions = {
-            [1] = { [1] = { type = "conditionIndex", value = 1, }, [2] = { type = "logic", value = 1, }, [3] = { type = "conditionIndex", value = 3, } },
-            [2] = { [1] = { type = "conditionIndex", value = 2, }, [2] = { type = "numberValue", value = 5, }, [3] = { type = "conditionIndex", value = 4, }, [4] = { type = "signalValue", value = {type = "item", name = "iron-plate"}, } },
+            [1] = { [1] = { type = "conditionIndex", value = 1, }, [2] = { type = "logic", value = 1, }, [3] = { type = "conditionIndex", value = 4, }, [4] = { type = "logic", value = 3, }, [5] = { type = "conditionIndex", value = 2, }, [6] = { type = "numberValue", value = 5, }, [7] = {type = "logic", value = 2 }, [8] = { type = "conditionIndex", value = 3, }, [9] = { type = "numberValue", value = 7, }, [10] = { type = "signalValue", value = {type = "item", name = "iron-plate"} }, }
+            --[2] = { [1] = { type = "conditionIndex", value = 2, }, [2] = { type = "numberValue", value = 5, }, [3] = {type = "logic", value = 2 }, [4] = { type = "conditionIndex", value = 3, }, [5] = { type = "numberValue", value = 7, }, [6] = { type = "signalValue", value = {type = "item", name = "iron-plate"}, } },
           }
         }
     end
@@ -88,6 +89,35 @@ end
 ----------------------------------------------------------- Boat and Lighthouse GUI picker handling
 
 
+local constructConditionChooser = function(gui_base, boat_data)
+  local gui_condition_base = gui_base.add({ type = "scroll-pane", name = "basicboat_condition"})
+  local gui_editor_base = gui_condition_base.add({ type = "line", name = "basicboat_editor_line1", direction = "horizontal" })
+
+  for i,condition in ipairs(boat_data.conditions) do
+    local gui_current_condition_table = gui_condition_base.add({ type = "table", name = ("basicboat_condition_table"..i), column_count = 3})
+    gui_current_condition_table.add({ type = "label", name = ("basicboat_condition_number_"..i), caption = i})
+    gui_current_condition_table.add({ type = "radiobutton", name = ("basicboat_condition_radio_"..i), state = (boat_data.selected_condition_index == i)})
+    local gui_current_condition = gui_current_condition_table.add({ type = "flow", name = ("basicboat_condition_"..i), direction = "horizontal"})
+    local j = 1
+    for _,subcondition in ipairs(condition) do
+      if subcondition.type == "conditionIndex" then
+        gui_current_condition.add({ type = "drop-down", name = "basicboat_condition_label_"..j, items = ((function(list) local names = {} for i,v in ipairs(list) do names[i] = v.description  end names[#names + 1] = "Remove this condition" return names end )(conditionTable)), selected_index = subcondition.value,  })
+      elseif subcondition.type == "logic" then
+        gui_current_condition.add({ type = "drop-down", name = "basicboat_condition_label_"..j, items = logicTable, selected_index = subcondition.value })
+      elseif subcondition.type == "numberValue" then
+        gui_current_condition.add({ type = "textfield", name = "basicboat_condition_label_"..j, text = subcondition.value, numeric = true,  })
+      elseif subcondition.type == "signalValue" then
+        gui_current_condition.add({ type = "choose-elem-button", name = "basicboat_condition_label_"..j, elem_type = "signal", signal = subcondition.value })
+      else
+        --throw an error of some kind, this shouldn't happen
+      end
+      j = j + 1
+    end
+    gui_current_condition.add({type = "button", name = "basicboat_condition_label_"..j, caption = "+"})
+  end
+  local gui_editor_base = gui_condition_base.add({ type = "line", name = "basicboat_editor_line2", direction = "horizontal" })
+end
+
 local boatGui_on_gui_opened = function (e)
   if e.entity and e.entity.name == "basic-boat" then
     local boat_data = global.boatsList[e.entity.unit_number]
@@ -101,31 +131,7 @@ local boatGui_on_gui_opened = function (e)
     gui_sigtab.add({type = "label", caption = "Automation Target Signal: "})
     gui_sigtab.add({type = "choose-elem-button", name = "basicboat_signalpicker", elem_type = "signal", signal = boat_data.signal })
 
-    local gui_editor_base = gui_base.add({ type = "frame", name = "basicboat_editor" })
-
-    local gui_condition_base = gui_base.add({ type = "scroll-pane", name = "basicboat_condition"})
-    for i,condition in ipairs(boat_data.conditions) do
-      local gui_current_condition_table = gui_condition_base.add({ type = "table", name = ("basicboat_condition_table"..i), column_count = 3})
-      gui_current_condition_table.add({ type = "label", name = ("basicboat_condition_number_"..i), caption = i})
-      gui_current_condition_table.add({ type = "radiobutton", name = ("basicboat_condition_radio_"..i), state = (boat_data.selected_condition_index == i)})
-      local gui_current_condition = gui_current_condition_table.add({ type = "flow", name = ("basicboat_condition_"..i), direction = "horizontal"})
-      local j = 1
-      for _,subcondition in ipairs(condition) do
-        if subcondition.type == "conditionIndex" then
-          gui_current_condition.add({ type = "drop-down", name = "basicboat_condition_label_"..j, items = ((function(list) local names = {} for i,v in ipairs(list) do names[i] = v.description  end return names end )(conditionTable)), selected_index = subcondition.value,  })
-        elseif subcondition.type == "logic" then
-          gui_current_condition.add({ type = "drop-down", name = "basicboat_condition_label_"..j, items = logicTable, selected_index = subcondition.value })
-        elseif subcondition.type == "numberValue" then
-          gui_current_condition.add({ type = "textfield", name = "basicboat_condition_label_"..j, text = subcondition.value, numeric = true,  })
-        elseif subcondition.type == "signalValue" then
-          gui_current_condition.add({ type = "choose-elem-button", name = "basicboat_condition_label_"..j, elem_type = "signal", signal = subcondition.value })
-        else
-          --throw an error of some kind, this shouldn't happen
-        end
-        j = j + 1
-      end
-      gui_current_condition.add({type = "button", name = "basicboat_condition_label_"..j, caption = "+"})
-    end
+    constructConditionChooser(gui_base, boat_data)
   end
 end
 
@@ -134,12 +140,41 @@ local boatGui_ConditionDropDown_on_gui_selection_state_changed = function(e)
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
+    local boat_data = global.boatsList[unitNumber]
 
     local subconditionIndex = tonumber(string.gsub(e.element.name, "basicboat_condition_label_", ""), 10)
     local conditionIndex = tonumber(string.gsub(e.element.parent.name, "basicboat_condition_", ""), 10)
 
-    global.boatsList[unitNumber].conditions[conditionIndex][subconditionIndex].value = e.element.selected_index
+    if conditionTable[e.element.selected_index] == nil then
+      local condition = boat_data.conditions[conditionIndex]
+      local minus = 1
+      local plus = 1
+      if conditionTable[condition[subconditionIndex].value].defaultValue ~= nil then
+        minus = minus + 1
+      end
+      if conditionTable[condition[subconditionIndex].value].defaultSignal ~= nil then
+        minus = minus + 1
+      end
+      if(subconditionIndex <= 1) then
+        plus = plus + 1
+      end
+      minus = minus + 1   --for the logic condition
+      --end
+      for i = (subconditionIndex + minus), #(condition), 1 do
+        condition[i-minus] = condition[i]
+      end
+      for i = (#condition), (#condition - minus + 1), -1 do
+        condition[i] = nil
+      end
+      if next(condition) == nil then
+        condition[1] = { type = "conditionIndex", value = 1, }
+      end
 
+      gui_base["basicboat_condition"].destroy()
+      constructConditionChooser(gui_base, boat_data)
+    else
+      global.boatsList[unitNumber].conditions[conditionIndex][subconditionIndex].value = e.element.selected_index
+    end
   end
 end
 
