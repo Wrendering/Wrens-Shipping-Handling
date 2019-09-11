@@ -18,9 +18,82 @@ end
 
 ----------------------------------------------------------- Entity Globals
 
-if global.boatsList == nil then
-    global.boatsList = {}
+if global.boatsList == nil then global.boatsList = {} end
+if global.boatsList_signalOrdered == nil then global.boatsList_signalOrdered = {} end
+if global.lighthousesList == nil then global.lighthousesList = {} end
+if global.lighthousesList_signalOrdered == nil then global.lighthousesList_signalOrdered = {} end
+if global.docksList == nil then global.docksList = {} end
+if global.buoysList == nil then global.buoysList = {} end
+
+----------------------------------------------------------- Boat Movement and Control
+
+local boatDirector_search_all = function(arg)
+  --Input table: signal = signal to search, EITHER boat OR boat_unit_number
+  if not arg.boat then
+    arg.boat = global.boatsList[arg.boat_unit_number].entity
+  else
+    arg.boat_unit_number = arg.boat.unit_number
+  end
+  arg.boatData = global.boatsList[arg.boat_unit_number]
+  local boatPos = arg.boat.position
+  local origTarget = nil
+  local newTarget = nil
+  local local_lighthousesList = global.lighthousesList
+  if global.lighthousesList_signalOrdered[arg.signal.type..arg.signal.name] ~= nil then
+    for lighthouse_unit_number,_ in pairs(global.lighthousesList_signalOrdered[arg.signal.type..arg.signal.name]) do
+      if not origTarget then
+        origTarget = local_lighthousesList[lighthouse_unit_number].entity.position
+      else
+        newTarget = local_lighthousesList[lighthouse_unit_number].entity.position
+        if (boatPos.x - origTarget.x)^2 + (boatPos.y - origTarget.y)^2 > (boatPos.x - newTarget.x)^2 + (boatPos.y - newTarget.y)^2 then
+          origTarget = newTarget
+        end
+      end
+    end
+    if arg.boatData.currentTarget == origTarget then
+      return false
+    end
+    arg.boatData.currentTarget = origTarget
+    return true
+  end
+  arg.boatData.currentTarget = nil
+  return true
 end
+
+local boatDirector_compare_one = function(arg)
+  --Input table: boat_unit_number, lighthouse_unit_number
+  arg.boatData = global.boatsList[arg.boat_unit_number]
+  local boatPos = arg.boatData.entity.position
+  local origTarget = arg.boatData.currentTarget
+  local newTarget = global.lighthousesList[arg.lighthouse_unit_number].entity.position
+
+  if origTarget == nil or (boatPos.x - origTarget.x)^2 + (boatPos.y - origTarget.y)^2 > (boatPos.x - newTarget.x)^2 + (boatPos.y - newTarget.y)^2 then
+    arg.boatData.currentTarget = newTarget
+    return true
+  end
+  return false
+end
+
+local boatDirector_setDirection = function (boatData)
+  if not boatData.currentTarget then return end
+  local boatPos = boatData.entity.position
+  local targetPos = boatData.currentTarget
+  boatData.entity.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
+  boatData.entity.riding_state = {acceleration = defines.riding.acceleration.accelerating, direction = defines.riding.direction.straight }
+end
+
+local boatDirector_slowDown = function(boatData)
+  if boatData.entity.speed < 0.01 then
+    boatData.entity.speed = 0
+    boatData.entity.riding_state = {acceleration = defines.riding.acceleration.nothing, direction = defines.riding.direction.straight }
+  else
+    boatData.entity.riding_state = {acceleration = defines.riding.acceleration.braking, direction = defines.riding.direction.straight }
+  end
+end
+
+--  v.automated and v.signal and (v.entity.burner.currently_burning or not v.entity.get_fuel_inventory().is_empty())
+
+----------------------------------------------------------- Boat and Lighthouse GUI
 
 local boatCreation_on_built_entity = function (e)
     if e.created_entity.name == "basic-boat" then
@@ -28,95 +101,150 @@ local boatCreation_on_built_entity = function (e)
           entity = e.created_entity,
           automated = true,
           signal = nil,
+          currentTarget = position,-- = nil, --unit_number = nil },
           selected_condition_index = 1,
           conditions = { [1] = { [1] = { type = "conditionIndex", value = 1, }, } }
         }
     end
 end
 
-local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
-    if e.entity.name == "basic-boat" then
-        global.boatsList[e.entity.unit_number] = nil
-    end
-end
-
-if global.lighthousesList == nil then
-    global.lighthousesList = {}
-end
-
-if global.lighthousesList_signalOrdered == nil then
-    global.lighthousesList_signalOrdered = {}
-end
-
-local lighthouseCreation_on_built_entity = function (e)
-    if e.created_entity.name == "lighthouse-entity" then
-        global.lighthousesList[e.created_entity.unit_number] = { entity = e.created_entity, signal = nil }
-    end
-end
-
-local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
-    if e.entity.name == "lighthouse-entity" then
-        local lostSignal = global.lighthousesList[e.entity.unit_number].signal
-        if lostSignal ~= nil then
-          global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
-          if next(global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
-        end
-        global.lighthousesList[e.entity.unit_number] = nil
-
-    end
-end
-
------------------------------------------------------------ Boat Movement and Control
-
 local boatSetup_on_built_entity = function (e)
   if(e.created_entity.name == "basic-boat") then
-    e.created_entity.set_driver(e.created_entity.surface.create_entity({ name = "character", position = e.created_entity.position, force = game.forces.player}))
+    if(global.boatsList[e.created_entity.unit_number].automated) then
+      e.created_entity.set_driver(e.created_entity.surface.create_entity({ name = "character", position = e.created_entity.position, force = game.forces.player}))
+    end
   end
 end
 
-local boatDirector_on_tick = function (e)
-    if e.tick % 60 == 0 then
-        for _,v in pairs(global.boatsList) do
-            if v.automated and (v.entity.burner.currently_burning or not v.entity.get_fuel_inventory().is_empty()) then
-                local boatPos = v.entity.position
-                if v.signal ~= nil and global.lighthousesList_signalOrdered[v.signal.type..v.signal.name] ~= nil then
-
-                  local targetPos = nil
-                  local potentialTarget = nil
-                  local targetDistance = nil
-
-                  for k,_ in pairs(global.lighthousesList_signalOrdered[v.signal.type..v.signal.name]) do
-                    potentialTarget = global.lighthousesList[k].entity.position
-                    if targetPos == nil then
-                      targetPos = potentialTarget
-                    else
-                      targetDistance = targetDistance or (targetPos.x - boatPos.x)^2 + (targetPos.y - boatPos.y)^2
-                      if (boatPos.x - potentialTarget.x)^2 + (boatPos.y - potentialTarget.y)^2 < targetDistance then
-                        targetPos = potentialTarget
-                      end
-                    end
-                  end
-                  if targetPos ~= nil then
-                    v.entity.orientation = math.atan2( (boatPos.x - targetPos.x), -(boatPos.y - targetPos.y)) / (2*math.pi) + 0.5
-                    v.entity.riding_state = {acceleration = defines.riding.acceleration.accelerating, direction = defines.riding.direction.straight }
-                  end
-                else
-                  if v.entity.speed < 0.01 then
-                    v.entity.speed = 0
-                    v.entity.riding_state = {acceleration = defines.riding.acceleration.nothing, direction = defines.riding.direction.straight }
-                  else
-                    v.entity.riding_state = {acceleration = defines.riding.acceleration.braking, direction = defines.riding.direction.straight }
-                  end
-                end
-            end
-        end
+local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
+  if e.entity.name == "basic-boat" then
+    local lostSignal = global.boatsList[e.entity.unit_number].signal
+    if lostSignal ~= nil then
+      global.boatsList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
+      if next(global.boatsList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.boatsList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
     end
+    global.boatsList[e.entity.unit_number] = nil
+  end
 end
 
+local lighthouseCreation_on_built_entity = function (e)
+  if e.created_entity.name == "lighthouse-entity" then
+    global.lighthousesList[e.created_entity.unit_number] = { entity = e.created_entity, signal = nil }
+  end
+end
 
+local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
+  if e.entity.name == "lighthouse-entity" then
+    local lostSignal = global.lighthousesList[e.entity.unit_number].signal
+    if lostSignal ~= nil then
+      global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
+      if next(global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
+    end
+    global.lighthousesList[e.entity.unit_number] = nil
 
+    local boatData = nil
+    local tempResult = nil
+    local boatsList = global.boatsList
+    if global.boatsList_signalOrdered[lostSignal.type..lostSignal.name] then
+      for boat_unit_number,_ in pairs(global.boatsList_signalOrdered[lostSignal.type..lostSignal.name]) do
+        boatData = boatsList[boat_unit_number]
+        tempResult = boatDirector_search_all({signal = lostSignal, boat_unit_number = boat_unit_number})
+        if boatData.automated then
+          if boatData.currentTarget ~= nil and tempResult then
+            boatDirector_setDirection(boatData)
+          else
+            boatDirector_slowDown(boatData)
+          end
+        end
+      end
+    end
+  end
+end
 
------------------------------------------------------------ Boat and Lighthouse GUI
+local boatGui_on_gui_elem_changed = function (e)
+  if e.element.name == "basicboat_signalpicker" then
+    local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
+    gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
+    local boat_unit_number = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
+    local boatData = global.boatsList[boat_unit_number]
+
+    local oldSignalVal = boatData.signal
+    local newSignalVal = e.element.elem_value
+
+    if oldSignalVal ~= nil then
+      global.boatsList_signalOrdered[oldSignalVal.type..oldSignalVal.name][boat_unit_number] = nil
+      if next(global.boatsList_signalOrdered[oldSignalVal.type..oldSignalVal.name]) == nil then global.boatsList_signalOrdered[oldSignalVal.type..oldSignalVal.name] = nil end
+    end
+    if newSignalVal ~= nil then
+      if not global.boatsList_signalOrdered[newSignalVal.type..newSignalVal.name] then global.boatsList_signalOrdered[newSignalVal.type..newSignalVal.name] = {} end
+      global.boatsList_signalOrdered[newSignalVal.type..newSignalVal.name][boat_unit_number] = true
+    end
+    boatData.signal = newSignalVal
+
+    if newSignalVal ~= nil then
+      local tempResult = boatDirector_search_all({signal = newSignalVal, boat_unit_number = boat_unit_number})
+      if boatData.automated then
+        if boatData.currentTarget ~= nil and tempResult then
+          boatDirector_setDirection(boatData)
+        else
+          boatDirector_slowDown(boatData)
+        end
+      end
+    end
+  end
+end
+
+local lighthouseGui_on_gui_elem_changed = function (e)
+  if e.element.name == "lighthouse_signalpicker" then
+    local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
+    local _, lighthouse_unit_number = next(gui_base.lighthouse_id.children_names) lighthouse_unit_number = tonumber(lighthouse_unit_number, 10) --[#gui_base.lighthouse_id.children_names].name
+    local lighthouse = global.lighthousesList[lighthouse_unit_number]
+
+    local oldSignalVal = global.lighthousesList[lighthouse_unit_number].signal
+    local newSignalVal = gui_base["lighthouse_signalpicker_table"]["lighthouse_signalpicker"].elem_value
+
+    if oldSignalVal ~= nil then
+      global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name][lighthouse_unit_number] = nil
+      if next(global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name]) == nil then global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name] = nil end
+    end
+    if newSignalVal ~= nil then
+      if not global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] then global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] = {} end
+      global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name][lighthouse_unit_number] = true
+    end
+    lighthouse.signal = newSignalVal
+
+    local boatData = nil
+    local boatsList = global.boatsList
+    if oldSignalVal ~= nil then
+      if global.boatsList_signalOrdered[oldSignalVal.type..oldSignalVal.name] ~= nil then
+        for boat_unit_number,_ in pairs(global.boatsList_signalOrdered[oldSignalVal.type..oldSignalVal.name]) do
+          boatData = boatsList[boat_unit_number]
+          tempResult = boatDirector_search_all({signal = oldSignalVal, boat_unit_number = boat_unit_number})
+          if boatData.automated then
+            if boatData.currentTarget ~= nil and tempResult then
+              boatDirector_setDirection(boatData)
+            else
+              boatDirector_slowDown(boatData)
+            end
+          end
+        end
+      end
+    end
+    if newSignalVal ~= nil then
+      if global.boatsList_signalOrdered[newSignalVal.type..newSignalVal.name] then
+        local tempResult = nil
+        for boat_unit_number,_ in pairs(global.boatsList_signalOrdered[newSignalVal.type..newSignalVal.name]) do
+          boatData = boatsList[boat_unit_number]
+          if boatDirector_compare_one({boat_unit_number = boat_unit_number, lighthouse_unit_number = lighthouse_unit_number}) then
+            if boatData.automated then
+              boatDirector_setDirection(boatData)
+            end
+          end
+        end
+      end
+    end
+  end
+end
 
 local constructConditionChooser = function(e) end
 
@@ -147,7 +275,8 @@ local boatGui_Automated_on_gui_checked_state_changed = function(e)
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
-    local entity = global.boatsList[unitNumber].entity
+    local boatData = global.boatsList[unitNumber]
+    local entity = boatData.entity
     --repeat
       local newAutomated = gui_base["basicboat_automated_table"]["basicboat_automated"].state
       if global.boatsList[unitNumber].automated ~= newAutomated then
@@ -166,6 +295,15 @@ local boatGui_Automated_on_gui_checked_state_changed = function(e)
           end
           entity.set_driver(nil)
           entity.set_driver(entity.surface.create_entity({ name = "character", position = entity.position, force = game.forces.player}))
+
+          if boatData.signal ~= nil then
+            local tempResult = boatDirector_search_all({signal = boatData.signal, boat_unit_number = entity.unit_number})
+            if boatData.currentTarget ~= nil and tempResult then
+              boatDirector_setDirection(boatData)
+            else
+              boatDirector_slowDown(boatData)
+            end
+          end
         else
           if(entity.get_driver() ~= nil and entity.get_driver().player ~= nil) then
             game.players[e.player_index].print("ERROR: Please tell mod author 2") --how did this happen?
@@ -184,16 +322,6 @@ local boatGui_Automated_on_gui_checked_state_changed = function(e)
   end
 end
 
-local boatGui_on_gui_elem_changed = function (e)
-  if e.element.name == "basicboat_signalpicker" then
-    local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
-    gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
-    local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
-
-    global.boatsList[unitNumber].signal = e.element.elem_value
-  end
-end
-
 local boatGui_on_gui_closed = function (e)
   if e.entity and e.entity.name == "basic-boat" then
     if game.players[e.player_index].gui.top["basicboat_frame"] then
@@ -207,7 +335,9 @@ end
 
 local lighthouseGui_on_gui_opened = function (e)
   if e.entity and e.entity.name == "lighthouse-entity" then
-    local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = "lighthouse_frame", caption = "Lighthouse Configuration", direction = "vertical" })
+    local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("lighthouse_frame"), caption = "Lighthouse Configuration", direction = "vertical" })
+    local guiEntityId = gui_base.add({ type = "empty-widget", name = "lighthouse_id"})
+    guiEntityId.add({ type = "empty-widget", name = e.entity.unit_number})
     local gui_auttab = gui_base.add({type = "table", name = "lighthouse_signalpicker_table", column_count = 2 })
     gui_auttab.add({type = "label", caption = "Lighthouse Signal: "})
     gui_auttab.add({type = "choose-elem-button", name = "lighthouse_signalpicker", elem_type = "signal", signal = global.lighthousesList[e.entity.unit_number].signal })
@@ -215,26 +345,12 @@ local lighthouseGui_on_gui_opened = function (e)
 end
 
 local lighthouseGui_on_gui_closed = function (e)
-    if e.entity and e.entity.name == "lighthouse-entity" then
-        if game.players[e.player_index].gui.top["lighthouse_frame"] then
-            local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
-
-            local oldSignalVal = global.lighthousesList[e.entity.unit_number].signal
-            local newSignalVal = gui_base["lighthouse_signalpicker_table"]["lighthouse_signalpicker"].elem_value
-
-            if oldSignalVal ~= nil then
-              global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name][e.entity.unit_number] = nil
-              if next(global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name]) == nil then global.lighthousesList_signalOrdered[oldSignalVal.type..oldSignalVal.name] = nil end
-            end
-            if newSignalVal ~= nil then
-              if not global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] then global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name] = {} end
-              global.lighthousesList_signalOrdered[newSignalVal.type..newSignalVal.name][e.entity.unit_number] = true
-            end
-            global.lighthousesList[e.entity.unit_number].signal = newSignalVal
-
-            gui_base.destroy()
-        end
+  if e.entity and e.entity.name == "lighthouse-entity" then
+    if game.players[e.player_index].gui.top["lighthouse_frame"] then
+      local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
+      gui_base.destroy()
     end
+  end
 end
 
 ----------------------------------------------------------- Boat Conditions Picking GUI
@@ -509,7 +625,7 @@ end
 
 local on_tick_handler = function(e)
     --boatPrint_on_tick(e)
-    boatDirector_on_tick(e)
+    --boatDirector_on_tick(e)
 end
 script.on_event(defines.events.on_tick, on_tick_handler)
 
@@ -559,6 +675,7 @@ script.on_event(defines.events.on_gui_checked_state_changed, on_gui_checked_stat
 local on_gui_elem_changed_handler = function(e)
   boatGui_on_gui_elem_changed(e)
   boatGui_SubconditionSignal_on_gui_elem_changed(e)
+  lighthouseGui_on_gui_elem_changed(e)
 end
 script.on_event(defines.events.on_gui_elem_changed, on_gui_elem_changed_handler)
 
