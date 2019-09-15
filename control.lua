@@ -1,4 +1,13 @@
+------------------------------------------------ Buoy Placement
 
+ --[[
+PROGRAM ASSUMPTIONS:
+- Boat automated state is only changed through the GUI [update]
+- Currently, no cloning or direct movement (Picker et al) of anything [set][update]
+- No tile types exist that change boat speed
+
+TODO: Add on_collision update
+--]]
 ------------------------------------------------ Dock Placement
 
 local dockPlacement_on_built_entity = function (e)
@@ -16,6 +25,56 @@ local dockPlacement_on_built_entity = function (e)
 end
 
 
+------------------------------------------------ Buoy Placement and Registration
+
+local BEACON_RADIUS = 15 --game.entity_prototypes["lighthouse-entity"].supply_area_distance
+local BUOY_RADIUS = 1
+
+local buoyPlacement_updateCheck, buoyPlacement_updateEntity
+
+local buoyPlacement_on_built_entity = function (e)
+  if string.find(e.created_entity.name, "buoy%-entity") ~= nil then
+    global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = nil} --
+    buoyPlacement_updateCheck(e.created_entity)
+  end
+end
+
+buoyPlacement_updateCheck = function(buoy)
+  local lighthouses = buoy.surface.find_entities_filtered({area={ left_top = {buoy.position.x - (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y - (BEACON_RADIUS + BUOY_RADIUS) }, right_bottom = {buoy.position.x + (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y + (BEACON_RADIUS + BUOY_RADIUS) }}, name = "lighthouse-entity" })
+  local lighthousesList = global.lighthousesList
+  local new_buoy = buoyPlacement_updateEntity(  (next(lighthouses) ~= nil) , buoy)
+
+  for _,i in pairs(lighthouses) do
+    if lighthousesList[i.unit_number].buoysList == nil then lighthousesList[i.unit_number].buoysList = {} end
+    lighthousesList[i.unit_number].buoysList[new_buoy.unit_number] = {entity = new_buoy, distance = (new_buoy.position.x - i.position.x)^2 + (new_buoy.position.y - i.position.y)^2 }
+  end
+end
+
+buoyPlacement_updateEntity = function(within_range, buoy)
+  local new_buoy
+  local buoysList = global.buoysList
+
+  if within_range then
+    new_buoy = buoy.surface.create_entity({name="incoming-buoy-entity", position = buoy.position, force = buoy.force})
+    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
+    buoysList[buoy.unit_number] = nil
+
+    if not buoysList[new_buoy.unit_number].active_state then buoysList[new_buoy.unit_number].active_state = "incoming" end
+  else
+    new_buoy = buoy.surface.create_entity({name="disabled-buoy-entity", position = buoy.position, force = buoy.force})
+    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
+    buoysList[buoy.unit_number] = nil
+
+
+  end
+  buoysList[new_buoy.unit_number].entity = new_buoy
+  buoy.destroy()
+  return new_buoy
+end
+
+-- So buoys: each lighthouse has a buoyList. Default color of buoys is grey, they change color on_lighthouse_placement or on_buoy_placement, they're returned that way on_lighthouse_destruction IF not covered by anything
+--
+
 ----------------------------------------------------------- Entity Globals
 
 if global.boatsList == nil then global.boatsList = {} end
@@ -25,7 +84,40 @@ if global.lighthousesList_signalOrdered == nil then global.lighthousesList_signa
 if global.docksList == nil then global.docksList = {} end
 if global.buoysList == nil then global.buoysList = {} end
 
------------------------------------------------------------ Boat Movement and Control
+----------------------------------------------------------- Boat Beacon Checking
+
+local boatCollision_on_tick = function(e)
+  local distance = nil
+  local boat_entity = nil
+  local position = nil
+  local lighthouses = nil
+  local buoys = {}
+  local lighthouseData = nil
+  local lighthousesList = global.lighthousesList
+
+  for boat_unit_number, boatData in pairs(global.boatsList) do
+    boat_entity = boatData.entity
+    position = boat_entity.position
+
+    lighthouses = boat_entity.surface.find_entities_filtered({area={ left_top = {position.x - BEACON_RADIUS, position.y - BEACON_RADIUS }, right_bottom = {position.x + BEACON_RADIUS, position.y + BEACON_RADIUS }}, name = "lighthouse-entity" })
+    for _,lighthouse in pairs(lighthouses) do
+      lighthouseData = lighthousesList[lighthouse.unit_number]
+      if lighthouseData.buoysList ~= nil then
+        distance = lighthouse.position
+        distance = (position.x - distance.x)^2 + (position.y - distance.y)^2
+        for _,buoy in pairs(lighthouseData.buoysList) do
+          if math.abs(buoy.distance - distance) < BUOY_RADIUS then
+            buoys[#buoys + 1] = buoy
+          end
+        end
+      end
+    end
+  end
+  --log(#buoys)
+end
+
+----------------------------------------------------------- Boat Movement Updating
+
 
 local boatDirector_search_all = function(arg)
   --Input table: signal = signal to search, EITHER boat OR boat_unit_number
@@ -129,7 +221,16 @@ end
 
 local lighthouseCreation_on_built_entity = function (e)
   if e.created_entity.name == "lighthouse-entity" then
-    global.lighthousesList[e.created_entity.unit_number] = { entity = e.created_entity, signal = nil }
+    local lighthouse = e.created_entity
+    lighthousesList = global.lighthousesList
+    lighthousesList[lighthouse.unit_number] =  { entity = entity, signal = nil, buoysList = {} }
+    lighthouseData = lighthousesList[lighthouse.unit_number]
+
+    local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS+1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
+    for _,i in pairs(buoys) do
+      if i.name == "disabled-buoy-entity" then i = buoyPlacement_updateEntity(true, i) end
+      lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
+    end
   end
 end
 
@@ -145,7 +246,7 @@ local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
     local boatData = nil
     local tempResult = nil
     local boatsList = global.boatsList
-    if global.boatsList_signalOrdered[lostSignal.type..lostSignal.name] then
+    if lostSignal ~= nil and global.boatsList_signalOrdered[lostSignal.type..lostSignal.name] then
       for boat_unit_number,_ in pairs(global.boatsList_signalOrdered[lostSignal.type..lostSignal.name]) do
         boatData = boatsList[boat_unit_number]
         tempResult = boatDirector_search_all({signal = lostSignal, boat_unit_number = boat_unit_number})
@@ -158,8 +259,30 @@ local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
         end
       end
     end
+
+    local lighthouse = e.entity
+    local lighthousesList = global.lighthousesList
+    local lighthouses = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }, right_bottom = {lighthouse.position.x + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }}, name = "lighthouse-entity"  })
+    local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS + 1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS + 1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
+    local bool = false
+    for _,i in pairs(buoys) do
+      bool = true
+      for _,j in pairs(lighthouses) do
+        if j.unit_number ~= lighthouse.unit_number then
+          if lighthousesList[j.unit_number].buoysList[i.unit_number] ~= nil then
+            bool = false
+            break
+          end
+        end
+      end
+      if bool then
+        buoyPlacement_updateEntity(false, i)
+      end
+    end
   end
 end
+
+------------------------------
 
 local boatGui_on_gui_elem_changed = function (e)
   if e.element.name == "basicboat_signalpicker" then
@@ -624,6 +747,7 @@ end
 ----------------------------------------------------------- Register Handlers
 
 local on_tick_handler = function(e)
+    boatCollision_on_tick(e)
     --boatPrint_on_tick(e)
     --boatDirector_on_tick(e)
 end
@@ -634,6 +758,7 @@ local on_built_entity_handler = function(e)
     boatSetup_on_built_entity(e)
     lighthouseCreation_on_built_entity(e)
     dockPlacement_on_built_entity(e)
+    buoyPlacement_on_built_entity(e)
 end
 script.on_event(defines.events.on_built_entity, on_built_entity_handler)
 
@@ -694,3 +819,8 @@ local on_gui_text_changed_handler = function(e)
   boatGui_ConditionNumber_on_gui_text_changed(e)
 end
 script.on_event(defines.events.on_gui_text_changed, on_gui_text_changed_handler)
+
+local on_pre_player_mined_item_handler = function(e)
+
+end
+script.on_event(defines.events.on_pre_player_mined_item, on_pre_player_mined_item_handler)

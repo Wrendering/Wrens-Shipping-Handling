@@ -143,7 +143,30 @@ local buoy_entity = {
     height = 10,
   },
 }
-data:extend({buoy_entity})
+
+local disabled_bouy_entity = table.deepcopy(buoy_entity)
+disabled_bouy_entity.name = "disabled-buoy-entity"
+disabled_bouy_entity.base_picture.tint =  { r = 0.2, g = 0.2, b = 0.2, a = 1}
+disabled_bouy_entity.animation.tint =     { r = 0.2, g = 0.2, b = 0.2, a = 1}
+data:extend({disabled_bouy_entity})
+
+local incoming_bouy_entity = table.deepcopy(buoy_entity)
+incoming_bouy_entity.name = "incoming-buoy-entity"
+incoming_bouy_entity.base_picture.tint =  { r = 0.5, g = 1, b = 0.5, a = 1}
+incoming_bouy_entity.animation.tint =     { r = 0.5, g = 1, b = 0.5, a = 1}
+data:extend({incoming_bouy_entity})
+
+local outgoing_bouy_entity = table.deepcopy(buoy_entity)
+outgoing_bouy_entity.name = "outgoing-buoy-entity"
+outgoing_bouy_entity.base_picture.tint = { r = 1, g = 0.5, b = 0.5, a = 1}
+outgoing_bouy_entity.animation.tint = { r = 1, g = 0.5, b = 0.5, a = 1}
+data:extend({outgoing_bouy_entity})
+
+local signal_bouy_entity = table.deepcopy(buoy_entity)
+signal_bouy_entity.name = "signal-buoy-entity"
+signal_bouy_entity.base_picture.tint = { r = 1, g = 1, b = 0.3, a = 1}
+signal_bouy_entity.animation.tint = { r = 1, g = 1, b = 0.3, a = 1}
+data:extend({signal_bouy_entity})
 
 local buoy_item = {
     type = "item",
@@ -152,7 +175,7 @@ local buoy_item = {
     icon_size = 32,
     subgroup = "energy",
     order = "a[buoy]",
-    place_result = "buoy-entity",
+    place_result = "disabled-buoy-entity",
     stack_size = 25,
 }
 data:extend({buoy_item})
