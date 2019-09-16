@@ -8,10 +8,25 @@ PROGRAM ASSUMPTIONS:
 
 TODO: Add on_collision update
 --]]
+
+----------------------------------------------------------- Entity Globals
+
+if global.boatsList == nil then global.boatsList = {} end
+if global.boatsList_signalOrdered == nil then global.boatsList_signalOrdered = {} end
+if global.lighthousesList == nil then global.lighthousesList = {} end
+if global.lighthousesList_signalOrdered == nil then global.lighthousesList_signalOrdered = {} end
+if global.docksList == nil then global.docksList = {} end
+if global.buoysList == nil then global.buoysList = {} end
+
+local BEACON_RADIUS = 15 --game.entity_prototypes["lighthouse-entity"].supply_area_distance
+local BUOY_RADIUS = 1
+local DOCK_RADIUS = 1
+
 ------------------------------------------------ Dock Placement
 
-local dockPlacement_on_built_entity = function (e)
-  if e.created_entity.name == "dock-entity" then
+
+local dockPlacementCheck_on_built_entity = function (e)
+  if e.created_entity.valid and e.created_entity.name == "dock-entity" then
     if next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.left_top.x - 1, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.left_top.x, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"water-tile",}, })) ~= nil then
       game.players[e.player_index].print("ERROR: Dock must be placed with back to land.")
     elseif next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.right_bottom.x, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.right_bottom.x + 1, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"ground-tile",}, })) ~= nil then
@@ -24,16 +39,38 @@ local dockPlacement_on_built_entity = function (e)
   end
 end
 
+local dockPlacement_Setup_on_built_entity = function(e)
+  if e.created_entity.valid and e.created_entity.name == "dock-entity" then
+    local docksList = global.docksList
+    local dock = e.created_entity
+    docksList[dock.unit_number] = { signal = nil, condition = 1, lighthouses = {}, entity = dock, }
+    local lighthouses = dock.surface.find_entities_filtered({area={ left_top = {dock.position.x - (BEACON_RADIUS + 1 + DOCK_RADIUS), dock.position.y - (BEACON_RADIUS + 1 + DOCK_RADIUS) }, right_bottom = {dock.position.x + (BEACON_RADIUS + 1 + DOCK_RADIUS), dock.position.y + (BEACON_RADIUS + 1 + DOCK_RADIUS) }}, name = "lighthouse-entity" })
+    local lighthousesList = global.lighthousesList
+    for _,i in pairs(lighthouses) do
+      docksList[dock.unit_number].lighthouses[i.unit_number] = true
+      lighthousesList[i.unit_number].docksList[dock.unit_number] = true
+    end
+  end
+end
+
+local dockDestruction_on_entity_died_on_player_mined_entity = function (e)
+  if e.entity.name == "dock-entity" then
+    local docksList = global.docksList
+    local lighthousesList = global.lighthousesList
+    for i,_ in pairs(docksList[e.entity.unit_number].lighthouses) do
+      lighthousesList[i].docksList[e.entity.unit_number] = nil
+    end
+    docksList[e.entity.unit_number] = nil
+
+  end
+end
 
 ------------------------------------------------ Buoy Placement and Registration
-
-local BEACON_RADIUS = 15 --game.entity_prototypes["lighthouse-entity"].supply_area_distance
-local BUOY_RADIUS = 1
 
 local buoyPlacement_updateCheck, buoyPlacement_updateEntity
 
 local buoyPlacement_on_built_entity = function (e)
-  if string.find(e.created_entity.name, "buoy%-entity") ~= nil then
+  if e.created_entity.valid and string.find(e.created_entity.name, "buoy%-entity") ~= nil then
     global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = nil} --
     buoyPlacement_updateCheck(e.created_entity)
   end
@@ -74,15 +111,6 @@ end
 
 -- So buoys: each lighthouse has a buoyList. Default color of buoys is grey, they change color on_lighthouse_placement or on_buoy_placement, they're returned that way on_lighthouse_destruction IF not covered by anything
 --
-
------------------------------------------------------------ Entity Globals
-
-if global.boatsList == nil then global.boatsList = {} end
-if global.boatsList_signalOrdered == nil then global.boatsList_signalOrdered = {} end
-if global.lighthousesList == nil then global.lighthousesList = {} end
-if global.lighthousesList_signalOrdered == nil then global.lighthousesList_signalOrdered = {} end
-if global.docksList == nil then global.docksList = {} end
-if global.buoysList == nil then global.buoysList = {} end
 
 ----------------------------------------------------------- Boat Beacon Checking
 
@@ -188,7 +216,7 @@ end
 ----------------------------------------------------------- Boat and Lighthouse GUI
 
 local boatCreation_on_built_entity = function (e)
-    if e.created_entity.name == "basic-boat" then
+    if e.created_entity.valid and e.created_entity.name == "basic-boat" then
         global.boatsList[e.created_entity.unit_number] = {
           entity = e.created_entity,
           automated = true,
@@ -201,7 +229,7 @@ local boatCreation_on_built_entity = function (e)
 end
 
 local boatSetup_on_built_entity = function (e)
-  if(e.created_entity.name == "basic-boat") then
+  if(e.created_entity.valid and e.created_entity.name == "basic-boat") then
     if(global.boatsList[e.created_entity.unit_number].automated) then
       e.created_entity.set_driver(e.created_entity.surface.create_entity({ name = "character", position = e.created_entity.position, force = game.forces.player}))
     end
@@ -220,17 +248,25 @@ local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
 end
 
 local lighthouseCreation_on_built_entity = function (e)
-  if e.created_entity.name == "lighthouse-entity" then
+  if e.created_entity.valid and e.created_entity.name == "lighthouse-entity" then
     local lighthouse = e.created_entity
-    lighthousesList = global.lighthousesList
-    lighthousesList[lighthouse.unit_number] =  { entity = entity, signal = nil, buoysList = {} }
-    lighthouseData = lighthousesList[lighthouse.unit_number]
+    local lighthousesList = global.lighthousesList
+    lighthousesList[lighthouse.unit_number] =  { entity = entity, signal = nil, buoysList = {}, docksList = {} }
+    local lighthouseData = lighthousesList[lighthouse.unit_number]
 
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS+1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     for _,i in pairs(buoys) do
       if i.name == "disabled-buoy-entity" then i = buoyPlacement_updateEntity(true, i) end
       lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
     end
+
+    local docksList = global.docksList
+    local docks = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + 1 + DOCK_RADIUS), lighthouse.position.y - (BEACON_RADIUS + 1 + DOCK_RADIUS) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + 1 + DOCK_RADIUS), lighthouse.position.y + (BEACON_RADIUS + 1 + DOCK_RADIUS) }}, name = "dock-entity" })
+    for _,i in pairs(docks) do
+      docksList[i.unit_number].lighthouses[lighthouse.unit_number] = true
+      lighthouseData.docksList[i.unit_number] = true
+    end
+
   end
 end
 
@@ -279,6 +315,15 @@ local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
         buoyPlacement_updateEntity(false, i)
       end
     end
+
+    local docksList = global.docksList
+    local docks = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + 1+1), lighthouse.position.y - (BEACON_RADIUS + 1+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + 1+1), lighthouse.position.y + (BEACON_RADIUS + 1+1) }}, name = "dock-entity" })
+    for _,i in pairs(docks) do
+      --note that the relevant entry might not actually already exist
+      docksList[i.unit_number].lighthouses[lighthouse.unit_number] = nil
+      --don't need to clear the lighthouse' dockList -- the lighthouse is gone
+    end
+
   end
 end
 
@@ -750,14 +795,19 @@ local on_tick_handler = function(e)
     boatCollision_on_tick(e)
     --boatPrint_on_tick(e)
     --boatDirector_on_tick(e)
+    --test_onTick(e)
 end
 script.on_event(defines.events.on_tick, on_tick_handler)
 
 local on_built_entity_handler = function(e)
     boatCreation_on_built_entity(e)
     boatSetup_on_built_entity(e)
+
     lighthouseCreation_on_built_entity(e)
-    dockPlacement_on_built_entity(e)
+
+    dockPlacementCheck_on_built_entity(e)
+    dockPlacement_Setup_on_built_entity(e)
+
     buoyPlacement_on_built_entity(e)
 end
 script.on_event(defines.events.on_built_entity, on_built_entity_handler)
@@ -765,12 +815,14 @@ script.on_event(defines.events.on_built_entity, on_built_entity_handler)
 local on_entity_died_handler = function(e)
     boatDestruction_on_entity_died_on_player_mined_entity(e)
     lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
+    dockDestruction_on_entity_died_on_player_mined_entity(e)
 end
 script.on_event(defines.events.on_entity_died, on_entity_died_handler)
 
 local on_player_mined_entity_handler = function(e)
     boatDestruction_on_entity_died_on_player_mined_entity(e)
     lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
+    dockDestruction_on_entity_died_on_player_mined_entity(e)
 end
 script.on_event(defines.events.on_player_mined_entity, on_player_mined_entity_handler)
 
