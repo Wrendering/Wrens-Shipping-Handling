@@ -71,38 +71,52 @@ local buoyPlacement_updateCheck, buoyPlacement_updateEntity
 
 local buoyPlacement_on_built_entity = function (e)
   if e.created_entity.valid and string.find(e.created_entity.name, "buoy%-entity") ~= nil then
-    global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = nil} --
+    global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = 1} --1 = "incoming", 2 = "outgoing", 3 = "signal"
     buoyPlacement_updateCheck(e.created_entity)
   end
 end
 
-buoyPlacement_updateCheck = function(buoy)
+local buoyTypesList = {[1] = "Incoming", [2] = "Outgoing", [3] = "Signal"}
+local buoyTypesList_entity = {[1] = "incoming-buoy-entity", [2] = "outgoing-buoy-entity", [3] = "signal-buoy-entity"}
+
+
+buoyPlacement_updateCheck = function(buoy, buoy_type_index)
+  --buoy_type_index is an optional argument
+
   local lighthouses = buoy.surface.find_entities_filtered({area={ left_top = {buoy.position.x - (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y - (BEACON_RADIUS + BUOY_RADIUS) }, right_bottom = {buoy.position.x + (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y + (BEACON_RADIUS + BUOY_RADIUS) }}, name = "lighthouse-entity" })
   local lighthousesList = global.lighthousesList
-  local new_buoy = buoyPlacement_updateEntity(  (next(lighthouses) ~= nil) , buoy)
 
   for _,i in pairs(lighthouses) do
-    if lighthousesList[i.unit_number].buoysList == nil then lighthousesList[i.unit_number].buoysList = {} end
+    lighthousesList[i.unit_number].buoysList[buoy.unit_number] = nil
+  end
+
+  local new_buoy = buoyPlacement_updateEntity({ buoy = buoy, within_range = (next(lighthouses) ~= nil), buoy_type = (buoy_type_index and buoyTypesList_entity[buoy_type_index]) })
+
+  for _,i in pairs(lighthouses) do
     lighthousesList[i.unit_number].buoysList[new_buoy.unit_number] = {entity = new_buoy, distance = (new_buoy.position.x - i.position.x)^2 + (new_buoy.position.y - i.position.y)^2 }
   end
+
+  return new_buoy
 end
 
-buoyPlacement_updateEntity = function(within_range, buoy)
+buoyPlacement_updateEntity = function(arg)
+  -- Required: buoy
+  -- Optional: within_range, buoy_type
+  arg.buoy_type = arg.buoy_type or buoyTypesList_entity[global.buoysList[arg.buoy.unit_number].active_state]
+  arg.within_range = arg.within_range or false
+
+  local buoy = arg.buoy
   local new_buoy
   local buoysList = global.buoysList
 
-  if within_range then
-    new_buoy = buoy.surface.create_entity({name="incoming-buoy-entity", position = buoy.position, force = buoy.force})
+  if arg.within_range then
+    new_buoy = buoy.surface.create_entity({name=arg.buoy_type, position = buoy.position, force = buoy.force})
     buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
     buoysList[buoy.unit_number] = nil
-
-    if not buoysList[new_buoy.unit_number].active_state then buoysList[new_buoy.unit_number].active_state = "incoming" end
   else
     new_buoy = buoy.surface.create_entity({name="disabled-buoy-entity", position = buoy.position, force = buoy.force})
     buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
     buoysList[buoy.unit_number] = nil
-
-
   end
   buoysList[new_buoy.unit_number].entity = new_buoy
   buoy.destroy()
@@ -251,12 +265,12 @@ local lighthouseCreation_on_built_entity = function (e)
   if e.created_entity.valid and e.created_entity.name == "lighthouse-entity" then
     local lighthouse = e.created_entity
     local lighthousesList = global.lighthousesList
-    lighthousesList[lighthouse.unit_number] =  { entity = entity, signal = nil, buoysList = {}, docksList = {} }
+    lighthousesList[lighthouse.unit_number] =  { entity = e.created_entity, signal = nil, buoysList = {}, docksList = {} }
     local lighthouseData = lighthousesList[lighthouse.unit_number]
 
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS+1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     for _,i in pairs(buoys) do
-      if i.name == "disabled-buoy-entity" then i = buoyPlacement_updateEntity(true, i) end
+      if i.name == "disabled-buoy-entity" then i = buoyPlacement_updateEntity({buoy = i, within_range = true, }) end
       lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
     end
 
@@ -312,7 +326,7 @@ local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
         end
       end
       if bool then
-        buoyPlacement_updateEntity(false, i)
+        buoyPlacement_updateEntity({buoy = i, within_range = false})
       end
     end
 
@@ -414,7 +428,7 @@ local lighthouseGui_on_gui_elem_changed = function (e)
   end
 end
 
-local constructConditionChooser = function(e) end
+local constructConditionChooser = function(e) end --forward declaration
 
 local boatGui_on_gui_opened = function (e)
   if e.entity and e.entity.name == "basic-boat" then
@@ -518,6 +532,90 @@ local lighthouseGui_on_gui_closed = function (e)
       local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
       gui_base.destroy()
     end
+  end
+end
+
+local dockGui_on_gui_opened = function (e)
+  if e.entity and e.entity.name == "dock-entity" then
+    local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("dock_frame"), caption = "Dock Configuration", direction = "vertical" })
+    local guiEntityId = gui_base.add({ type = "empty-widget", name = "dock_id"})
+    guiEntityId.add({ type = "empty-widget", name = e.entity.unit_number})
+    local gui_auttab = gui_base.add({type = "table", name = "dock_signalpicker_table", column_count = 2 })
+    gui_auttab.add({type = "label", caption = "Signal Applied: "})
+    gui_auttab.add({type = "choose-elem-button", name = "dock_signalpicker", elem_type = "signal", signal = global.docksList[e.entity.unit_number].signal })
+    local gui_contab = gui_base.add({type = "table", name = "dock_conditionpicker_table", column_count = 2 })
+    gui_contab.add({type = "label", caption = "Condition Index Applied: "})
+    gui_contab.add({ type = "textfield", name = "dock_conditionpicker", text = global.docksList[e.entity.unit_number].conditionIndex, numeric = true, allow_decimal = false, allow_negative = false })
+
+  end
+end
+
+local dockGui_on_gui_closed = function (e)
+  if e.entity and e.entity.name == "dock-entity" then
+    if game.players[e.player_index].gui.top["dock_frame"] then
+      local gui_base = game.players[e.player_index].gui.top["dock_frame"]
+      gui_base.destroy()
+    end
+  end
+end
+
+local dockGui_ConditionNumber_on_gui_text_changed = function(e)
+  if e.element.name == "dock_conditionpicker" then
+    local gui_base = game.players[e.player_index].gui.top["dock_frame"]
+    local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
+    local dockData = global.docksList[dock_unit_number]
+
+    if tonumber(e.element.text, 10) == 0 then e.element.text = 1 end
+
+    dockData.conditionIndex = tonumber(e.element.text,10)
+  end
+end
+
+local dockGui_on_gui_elem_changed = function (e)
+  if e.element.name == "dock_signalpicker" then
+    local gui_base = game.players[e.player_index].gui.top["dock_frame"]
+    local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
+    local dockData = global.docksList[dock_unit_number]
+
+    dockData.signal = e.element.elem_value
+  end
+end
+
+
+local buoyGui_on_gui_opened = function (e)
+  if e.entity and string.find(e.entity.name, "buoy%-entity") ~= nil then
+    local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("buoy_frame"), caption = "Buoy Configuration", direction = "vertical" })
+    local guiEntityId = gui_base.add({ type = "empty-widget", name = "buoy_id"})
+    guiEntityId.add({ type = "empty-widget", name = e.entity.unit_number})
+    local gui_auttab = gui_base.add({type = "table", name = "buoy_signalpicker_table", column_count = 2 })
+    gui_auttab.add({type = "label", caption = "Buoy State: "})
+    gui_auttab.add({type = "drop-down", name = "buoy_statepicker", items = buoyTypesList, selected_index = global.buoysList[e.entity.unit_number].active_state })
+  end
+end
+
+local buoyGui_on_gui_closed = function (e)
+  if e.entity and string.find(e.entity.name, "buoy%-entity") ~= nil then
+    if game.players[e.player_index].gui.top["buoy_frame"] then
+      local gui_base = game.players[e.player_index].gui.top["buoy_frame"]
+      gui_base.destroy()
+    end
+  end
+end
+
+local buoyGui_ConditionDropDown_on_gui_selection_state_changed = function(e)
+  if e.element.name == "buoy_statepicker" then
+    local gui_base = game.players[e.player_index].gui.top["buoy_frame"]
+    local _, buoy_unit_number = next(gui_base.buoy_id.children_names) buoy_unit_number = tonumber(buoy_unit_number, 10)
+    local buoyData = global.buoysList[buoy_unit_number]
+    local buoy = buoyData.entity
+
+    buoyData.active_state = e.element.selected_index
+
+    local new_buoy = buoyPlacement_updateCheck(buoy, buoyData.active_state)
+
+    gui_base.destroy()
+
+    game.players[e.player_index].opened = new_buoy
   end
 end
 
@@ -834,12 +932,16 @@ script.on_event(defines.events.on_chunk_generated, on_chunk_generated_handler)
 local on_gui_opened_handler = function(e)
     boatGui_on_gui_opened(e)
     lighthouseGui_on_gui_opened(e)
+    dockGui_on_gui_opened(e)
+    buoyGui_on_gui_opened(e)
 end
 script.on_event(defines.events.on_gui_opened, on_gui_opened_handler)
 
 local on_gui_closed_handler = function(e)
     boatGui_on_gui_closed(e)
     lighthouseGui_on_gui_closed(e)
+    dockGui_on_gui_closed(e)
+    buoyGui_on_gui_closed(e)
 end
 script.on_event(defines.events.on_gui_closed, on_gui_closed_handler)
 
@@ -853,11 +955,13 @@ local on_gui_elem_changed_handler = function(e)
   boatGui_on_gui_elem_changed(e)
   boatGui_SubconditionSignal_on_gui_elem_changed(e)
   lighthouseGui_on_gui_elem_changed(e)
+  dockGui_on_gui_elem_changed(e)
 end
 script.on_event(defines.events.on_gui_elem_changed, on_gui_elem_changed_handler)
 
 local on_gui_selection_state_changed_handler = function(e)
   boatGui_ConditionDropDown_on_gui_selection_state_changed(e)
+  buoyGui_ConditionDropDown_on_gui_selection_state_changed(e)
 end
 script.on_event(defines.events.on_gui_selection_state_changed, on_gui_selection_state_changed_handler)
 
@@ -869,6 +973,7 @@ script.on_event(defines.events.on_gui_click, on_gui_click_handler)
 
 local on_gui_text_changed_handler = function(e)
   boatGui_ConditionNumber_on_gui_text_changed(e)
+  dockGui_ConditionNumber_on_gui_text_changed(e)
 end
 script.on_event(defines.events.on_gui_text_changed, on_gui_text_changed_handler)
 

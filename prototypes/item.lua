@@ -15,7 +15,7 @@ local dock_entity = {
   flags = {"placeable-player", },
   collision_mask = {"ground-tile", "object-layer"},
   order = "b-dock",
-  minable = { mining_time = 2, result = "dock-item", },
+  minable = { mining_time = 0.2, result = "dock-item", },
   max_health = 500,
   collision_box = {{-1.0, -1.5}, {0.2, 1.5}},
   selection_box = {{-1.0, -1.5}, {0.2, 1.5}},
@@ -200,7 +200,7 @@ local lighthouse_entity = {
 
     flags = { "placeable-player", },
     order = "b-lighthouse",
-    minable = { mining_time = 3, result = "lighthouse-item", },
+    minable = { mining_time = 0.3, result = "lighthouse-item", },
     max_health = 500,
     collision_box = {{-1.5, -1.5}, {1.5, 1.5}},
     selection_box = {{-1.5, -1.5}, {1.5, 1.5}},
