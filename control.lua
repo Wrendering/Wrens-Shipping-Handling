@@ -9,6 +9,8 @@ PROGRAM ASSUMPTIONS:
 TODO: Add on_collision update
 --]]
 
+local APIInterface = require("scripts/APIInterface")
+
 ----------------------------------------------------------- Entity Globals
 
 if global.boatsList == nil then global.boatsList = {} end
@@ -25,7 +27,7 @@ local DOCK_RADIUS = 1
 ------------------------------------------------ Dock Placement
 
 
-local dockPlacementCheck_on_built_entity = function (e)
+APIInterface.registerFunction("on_built_entity",  function (e)
   if e.created_entity.valid and e.created_entity.name == "dock-entity" then
     if next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.left_top.x - 1, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.left_top.x, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"water-tile",}, })) ~= nil then
       game.players[e.player_index].print("ERROR: Dock must be placed with back to land.")
@@ -37,9 +39,10 @@ local dockPlacementCheck_on_built_entity = function (e)
     game.players[e.player_index].insert(e.stack)
     e.created_entity.destroy()
   end
-end
+end)
 
-local dockPlacement_Setup_on_built_entity = function(e)
+
+APIInterface.registerFunction("on_built_entity", function(e)
   if e.created_entity.valid and e.created_entity.name == "dock-entity" then
     local docksList = global.docksList
     local dock = e.created_entity
@@ -51,9 +54,9 @@ local dockPlacement_Setup_on_built_entity = function(e)
       lighthousesList[i.unit_number].docksList[dock.unit_number] = true
     end
   end
-end
+end)
 
-local dockDestruction_on_entity_died_on_player_mined_entity = function (e)
+APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
   if e.entity.name == "dock-entity" then
     local docksList = global.docksList
     local lighthousesList = global.lighthousesList
@@ -63,18 +66,18 @@ local dockDestruction_on_entity_died_on_player_mined_entity = function (e)
     docksList[e.entity.unit_number] = nil
 
   end
-end
+end)
 
 ------------------------------------------------ Buoy Placement and Registration
 
 local buoyPlacement_updateCheck, buoyPlacement_updateEntity
 
-local buoyPlacement_on_built_entity = function (e)
+APIInterface.registerFunction("on_built_entity", function (e)
   if e.created_entity.valid and string.find(e.created_entity.name, "buoy%-entity") ~= nil then
     global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = 1} --1 = "incoming", 2 = "outgoing", 3 = "signal"
     buoyPlacement_updateCheck(e.created_entity)
   end
-end
+end)
 
 local buoyTypesList = {[1] = "Incoming", [2] = "Outgoing", [3] = "Signal"}
 local buoyTypesList_entity = {[1] = "incoming-buoy-entity", [2] = "outgoing-buoy-entity", [3] = "signal-buoy-entity"}
@@ -128,7 +131,7 @@ end
 
 ----------------------------------------------------------- Boat Beacon Checking
 
-local boatCollision_on_tick = function(e)
+APIInterface.registerFunction("on_tick", function(e)
   local distance = nil
   local boat_entity = nil
   local position = nil
@@ -156,7 +159,7 @@ local boatCollision_on_tick = function(e)
     end
   end
   --log(#buoys)
-end
+end)
 
 ----------------------------------------------------------- Boat Movement Updating
 
@@ -229,7 +232,7 @@ end
 
 ----------------------------------------------------------- Boat and Lighthouse GUI
 
-local boatCreation_on_built_entity = function (e)
+APIInterface.registerFunction("on_built_entity", function (e)
     if e.created_entity.valid and e.created_entity.name == "basic-boat" then
         global.boatsList[e.created_entity.unit_number] = {
           entity = e.created_entity,
@@ -240,17 +243,17 @@ local boatCreation_on_built_entity = function (e)
           conditions = { [1] = { [1] = { type = "conditionIndex", value = 1, }, } }
         }
     end
-end
+end)
 
-local boatSetup_on_built_entity = function (e)
+APIInterface.registerFunction("on_built_entity", function (e)
   if(e.created_entity.valid and e.created_entity.name == "basic-boat") then
     if(global.boatsList[e.created_entity.unit_number].automated) then
       e.created_entity.set_driver(e.created_entity.surface.create_entity({ name = "character", position = e.created_entity.position, force = game.forces.player}))
     end
   end
-end
+end)
 
-local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
+APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
   if e.entity.name == "basic-boat" then
     local lostSignal = global.boatsList[e.entity.unit_number].signal
     if lostSignal ~= nil then
@@ -259,9 +262,9 @@ local boatDestruction_on_entity_died_on_player_mined_entity = function (e)
     end
     global.boatsList[e.entity.unit_number] = nil
   end
-end
+end)
 
-local lighthouseCreation_on_built_entity = function (e)
+APIInterface.registerFunction("on_built_entity", function (e)
   if e.created_entity.valid and e.created_entity.name == "lighthouse-entity" then
     local lighthouse = e.created_entity
     local lighthousesList = global.lighthousesList
@@ -282,9 +285,9 @@ local lighthouseCreation_on_built_entity = function (e)
     end
 
   end
-end
+end)
 
-local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
+APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
   if e.entity.name == "lighthouse-entity" then
     local lostSignal = global.lighthousesList[e.entity.unit_number].signal
     if lostSignal ~= nil then
@@ -339,12 +342,12 @@ local lighthouseDestruction_on_entity_died_on_player_mined_entity = function (e)
     end
 
   end
-end
+end)
 
 ------------------------------
 
-local boatGui_on_gui_elem_changed = function (e)
-  if e.element.name == "basicboat_signalpicker" then
+APIInterface.registerFunction("on_gui_elem_changed", function (e)
+  if e.element.valid and e.element.name == "basicboat_signalpicker" then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local boat_unit_number = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -374,10 +377,10 @@ local boatGui_on_gui_elem_changed = function (e)
       end
     end
   end
-end
+end)
 
-local lighthouseGui_on_gui_elem_changed = function (e)
-  if e.element.name == "lighthouse_signalpicker" then
+APIInterface.registerFunction("on_gui_elem_changed", function (e)
+  if e.element.valid and e.element.name == "lighthouse_signalpicker" then
     local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
     local _, lighthouse_unit_number = next(gui_base.lighthouse_id.children_names) lighthouse_unit_number = tonumber(lighthouse_unit_number, 10) --[#gui_base.lighthouse_id.children_names].name
     local lighthouse = global.lighthousesList[lighthouse_unit_number]
@@ -426,11 +429,11 @@ local lighthouseGui_on_gui_elem_changed = function (e)
       end
     end
   end
-end
+end)
 
 local constructConditionChooser = function(e) end --forward declaration
 
-local boatGui_on_gui_opened = function (e)
+APIInterface.registerFunction("on_gui_opened", function (e)
   if e.entity and e.entity.name == "basic-boat" then
     local boat_data = global.boatsList[e.entity.unit_number]
 
@@ -450,10 +453,10 @@ local boatGui_on_gui_opened = function (e)
 
     constructConditionChooser(gui_base, boat_data)
   end
-end
+end)
 
-local boatGui_Automated_on_gui_checked_state_changed = function(e)
-  if e.element.name == "basicboat_automated" then
+APIInterface.registerFunction("on_gui_checked_state_changed", function(e)
+  if e.element.valid and e.element.name == "basicboat_automated" then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -502,9 +505,9 @@ local boatGui_Automated_on_gui_checked_state_changed = function(e)
     return
     --until(true)
   end
-end
+end)
 
-local boatGui_on_gui_closed = function (e)
+APIInterface.registerFunction("on_gui_closed", function (e)
   if e.entity and e.entity.name == "basic-boat" then
     if game.players[e.player_index].gui.top["basicboat_frame"] then
       --local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
@@ -513,9 +516,9 @@ local boatGui_on_gui_closed = function (e)
       game.players[e.player_index].gui.top["basicboat_frame"].destroy()
     end
   end
-end
+end)
 
-local lighthouseGui_on_gui_opened = function (e)
+APIInterface.registerFunction("on_gui_opened", function (e)
   if e.entity and e.entity.name == "lighthouse-entity" then
     local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("lighthouse_frame"), caption = "Lighthouse Configuration", direction = "vertical" })
     local guiEntityId = gui_base.add({ type = "empty-widget", name = "lighthouse_id"})
@@ -524,18 +527,18 @@ local lighthouseGui_on_gui_opened = function (e)
     gui_auttab.add({type = "label", caption = "Lighthouse Signal: "})
     gui_auttab.add({type = "choose-elem-button", name = "lighthouse_signalpicker", elem_type = "signal", signal = global.lighthousesList[e.entity.unit_number].signal })
   end
-end
+end)
 
-local lighthouseGui_on_gui_closed = function (e)
+APIInterface.registerFunction("on_gui_closed", function (e)
   if e.entity and e.entity.name == "lighthouse-entity" then
     if game.players[e.player_index].gui.top["lighthouse_frame"] then
       local gui_base = game.players[e.player_index].gui.top["lighthouse_frame"]
       gui_base.destroy()
     end
   end
-end
+end)
 
-local dockGui_on_gui_opened = function (e)
+APIInterface.registerFunction("on_gui_opened", function (e)
   if e.entity and e.entity.name == "dock-entity" then
     local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("dock_frame"), caption = "Dock Configuration", direction = "vertical" })
     local guiEntityId = gui_base.add({ type = "empty-widget", name = "dock_id"})
@@ -548,19 +551,19 @@ local dockGui_on_gui_opened = function (e)
     gui_contab.add({ type = "textfield", name = "dock_conditionpicker", text = global.docksList[e.entity.unit_number].conditionIndex, numeric = true, allow_decimal = false, allow_negative = false })
 
   end
-end
+end)
 
-local dockGui_on_gui_closed = function (e)
+APIInterface.registerFunction("on_gui_closed", function (e)
   if e.entity and e.entity.name == "dock-entity" then
     if game.players[e.player_index].gui.top["dock_frame"] then
       local gui_base = game.players[e.player_index].gui.top["dock_frame"]
       gui_base.destroy()
     end
   end
-end
+end)
 
-local dockGui_ConditionNumber_on_gui_text_changed = function(e)
-  if e.element.name == "dock_conditionpicker" then
+APIInterface.registerFunction("on_gui_text_changed", function(e)
+  if e.element.valid and e.element.name == "dock_conditionpicker" then
     local gui_base = game.players[e.player_index].gui.top["dock_frame"]
     local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
     local dockData = global.docksList[dock_unit_number]
@@ -569,20 +572,20 @@ local dockGui_ConditionNumber_on_gui_text_changed = function(e)
 
     dockData.conditionIndex = tonumber(e.element.text,10)
   end
-end
+end)
 
-local dockGui_on_gui_elem_changed = function (e)
-  if e.element.name == "dock_signalpicker" then
+APIInterface.registerFunction("on_gui_elem_changed", function (e)
+  if e.element.valid and e.element.name == "dock_signalpicker" then
     local gui_base = game.players[e.player_index].gui.top["dock_frame"]
     local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
     local dockData = global.docksList[dock_unit_number]
 
     dockData.signal = e.element.elem_value
   end
-end
+end)
 
 
-local buoyGui_on_gui_opened = function (e)
+APIInterface.registerFunction("on_gui_opened", function (e)
   if e.entity and string.find(e.entity.name, "buoy%-entity") ~= nil then
     local gui_base = game.players[e.player_index].gui.top.add({type = "frame", name = ("buoy_frame"), caption = "Buoy Configuration", direction = "vertical" })
     local guiEntityId = gui_base.add({ type = "empty-widget", name = "buoy_id"})
@@ -591,19 +594,19 @@ local buoyGui_on_gui_opened = function (e)
     gui_auttab.add({type = "label", caption = "Buoy State: "})
     gui_auttab.add({type = "drop-down", name = "buoy_statepicker", items = buoyTypesList, selected_index = global.buoysList[e.entity.unit_number].active_state })
   end
-end
+end)
 
-local buoyGui_on_gui_closed = function (e)
+APIInterface.registerFunction("on_gui_closed", function (e)
   if e.entity and string.find(e.entity.name, "buoy%-entity") ~= nil then
     if game.players[e.player_index].gui.top["buoy_frame"] then
       local gui_base = game.players[e.player_index].gui.top["buoy_frame"]
       gui_base.destroy()
     end
   end
-end
+end)
 
-local buoyGui_ConditionDropDown_on_gui_selection_state_changed = function(e)
-  if e.element.name == "buoy_statepicker" then
+APIInterface.registerFunction("on_gui_selection_state_changed", function(e)
+  if e.element.valid and e.element.name == "buoy_statepicker" then
     local gui_base = game.players[e.player_index].gui.top["buoy_frame"]
     local _, buoy_unit_number = next(gui_base.buoy_id.children_names) buoy_unit_number = tonumber(buoy_unit_number, 10)
     local buoyData = global.buoysList[buoy_unit_number]
@@ -617,7 +620,7 @@ local buoyGui_ConditionDropDown_on_gui_selection_state_changed = function(e)
 
     game.players[e.player_index].opened = new_buoy
   end
-end
+end)
 
 ----------------------------------------------------------- Boat Conditions Picking GUI
 
@@ -668,8 +671,8 @@ constructConditionChooser = function(gui_base, boat_data)
   --local gui_editor_base = gui_condition_base.add({ type = "line", name = "basicboat_editor_line2", direction = "horizontal" })
 end
 
- local boatGui_ConditionDropDown_on_gui_selection_state_changed = function(e)
-  if string.find(e.element.name, "basicboat_condition_label_") ~= nil then
+APIInterface.registerFunction("on_gui_selection_state_changed", function(e)
+  if e.element.valid and string.find(e.element.name, "basicboat_condition_label_") ~= nil then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -736,10 +739,10 @@ end
       condition[subconditionIndex].value = e.element.selected_index
     end
   end
-end
+end)
 
-local boatGui_SubconditionSignal_on_gui_elem_changed = function(e)
-  if string.find(e.element.name, "basicboat_condition_label_") ~= nil then
+APIInterface.registerFunction("on_gui_elem_changed", function(e)
+  if e.element.valid and string.find(e.element.name, "basicboat_condition_label_") ~= nil then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -749,10 +752,10 @@ local boatGui_SubconditionSignal_on_gui_elem_changed = function(e)
 
     global.boatsList[unitNumber].conditions[conditionIndex][subconditionIndex].value = e.element.elem_value
   end
-end
+end)
 
-local boatGui_ConditionRadio_on_gui_checked_state_changed = function(e)
-  if string.find(e.element.name, "basicboat_condition_radio_") ~= nil then
+APIInterface.registerFunction("on_gui_checked_state_changed", function(e)
+  if e.element.valid and string.find(e.element.name, "basicboat_condition_radio_") ~= nil then
     for _, v in pairs(e.element.parent.parent.children) do
       v["basicboat_condition_radio_"..(string.gsub(v.name, "basicboat_condition_table", ""))].state = false
     end
@@ -764,10 +767,10 @@ local boatGui_ConditionRadio_on_gui_checked_state_changed = function(e)
 
     global.boatsList[unitNumber].selected_condition_index = tonumber(string.gsub(e.element.name, "basicboat_condition_radio_", ""), 10)
   end
-end
+end)
 
-local boatGui_ConditionAdd_on_gui_click = function(e)
-  if string.find(e.element.name, "basicboat_condition_label_") and e.element.caption == "+" then
+APIInterface.registerFunction("on_gui_click", function(e)
+  if e.element.valid and string.find(e.element.name, "basicboat_condition_label_") and e.element.caption == "+" then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -781,9 +784,9 @@ local boatGui_ConditionAdd_on_gui_click = function(e)
     gui_base["basicboat_condition"].destroy()
     constructConditionChooser(gui_base, boat_data)
   end
-end
+end)
 
-local boatGui_ConditionButtons_on_gui_click = function(e)
+APIInterface.registerFunction("on_gui_click", function(e)
   if e.element.valid and e.element.parent.name == "basicboat_conditionButton_table" then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
@@ -805,10 +808,10 @@ local boatGui_ConditionButtons_on_gui_click = function(e)
     gui_base["basicboat_condition"].destroy()
     constructConditionChooser(gui_base, boat_data)
   end
-end
+end)
 
-local boatGui_ConditionNumber_on_gui_text_changed = function(e)
-  if string.find(e.element.name, "basicboat_condition_label_") ~= nil then
+APIInterface.registerFunction("on_gui_text_changed", function(e)
+  if e.element.valid and string.find(e.element.name, "basicboat_condition_label_") ~= nil then
     local gui_base = game.players[e.player_index].gui.top["basicboat_frame"]
     gui_base = gui_base[gui_base.children_names[#gui_base.children_names]]
     local unitNumber = tonumber(string.gsub(gui_base.name, "basicboat_id_", ""), 10)
@@ -818,7 +821,7 @@ local boatGui_ConditionNumber_on_gui_text_changed = function(e)
 
     global.boatsList[unitNumber].conditions[conditionIndex][subconditionIndex].value = tonumber(e.element.text,10)
   end
-end
+end)
 
 ----------------------------------------------------------- Ocean Edge Converter
 
@@ -828,7 +831,7 @@ OCEAN_SHALLOW_ZONE = 16
 
 HARBOR_MOUTH_SEARCH_LENGTH = 6
 
-local oceanOverwriter_on_chunk_generated = function (e)
+APIInterface.registerFunction("on_chunk_generated", function (e)
 
     if e.area.right_bottom.x > OCEAN_EFFECT_EDGE then     --could later be changed to a range thing... for now, 1 chunk is fine
         for i,v in pairs(e.surface.find_entities(e.area)) do
@@ -883,101 +886,4 @@ local oceanOverwriter_on_chunk_generated = function (e)
 
     e.surface.set_tiles(setOfTiles, true)
 
-end
-
---x==y and x or y -- x==y ? x : y --works as long as x is not false or nil
-
------------------------------------------------------------ Register Handlers
-
-local on_tick_handler = function(e)
-    boatCollision_on_tick(e)
-    --boatPrint_on_tick(e)
-    --boatDirector_on_tick(e)
-    --test_onTick(e)
-end
-script.on_event(defines.events.on_tick, on_tick_handler)
-
-local on_built_entity_handler = function(e)
-    boatCreation_on_built_entity(e)
-    boatSetup_on_built_entity(e)
-
-    lighthouseCreation_on_built_entity(e)
-
-    dockPlacementCheck_on_built_entity(e)
-    dockPlacement_Setup_on_built_entity(e)
-
-    buoyPlacement_on_built_entity(e)
-end
-script.on_event(defines.events.on_built_entity, on_built_entity_handler)
-
-local on_entity_died_handler = function(e)
-    boatDestruction_on_entity_died_on_player_mined_entity(e)
-    lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
-    dockDestruction_on_entity_died_on_player_mined_entity(e)
-end
-script.on_event(defines.events.on_entity_died, on_entity_died_handler)
-
-local on_player_mined_entity_handler = function(e)
-    boatDestruction_on_entity_died_on_player_mined_entity(e)
-    lighthouseDestruction_on_entity_died_on_player_mined_entity(e)
-    dockDestruction_on_entity_died_on_player_mined_entity(e)
-end
-script.on_event(defines.events.on_player_mined_entity, on_player_mined_entity_handler)
-
-local on_chunk_generated_handler = function(e)
-    oceanOverwriter_on_chunk_generated(e)
-end
-script.on_event(defines.events.on_chunk_generated, on_chunk_generated_handler)
-
-local on_gui_opened_handler = function(e)
-    boatGui_on_gui_opened(e)
-    lighthouseGui_on_gui_opened(e)
-    dockGui_on_gui_opened(e)
-    buoyGui_on_gui_opened(e)
-end
-script.on_event(defines.events.on_gui_opened, on_gui_opened_handler)
-
-local on_gui_closed_handler = function(e)
-    boatGui_on_gui_closed(e)
-    lighthouseGui_on_gui_closed(e)
-    dockGui_on_gui_closed(e)
-    buoyGui_on_gui_closed(e)
-end
-script.on_event(defines.events.on_gui_closed, on_gui_closed_handler)
-
-local on_gui_checked_state_changed_handler = function(e)
-    boatGui_Automated_on_gui_checked_state_changed(e)
-    boatGui_ConditionRadio_on_gui_checked_state_changed(e)
-end
-script.on_event(defines.events.on_gui_checked_state_changed, on_gui_checked_state_changed_handler)
-
-local on_gui_elem_changed_handler = function(e)
-  boatGui_on_gui_elem_changed(e)
-  boatGui_SubconditionSignal_on_gui_elem_changed(e)
-  lighthouseGui_on_gui_elem_changed(e)
-  dockGui_on_gui_elem_changed(e)
-end
-script.on_event(defines.events.on_gui_elem_changed, on_gui_elem_changed_handler)
-
-local on_gui_selection_state_changed_handler = function(e)
-  boatGui_ConditionDropDown_on_gui_selection_state_changed(e)
-  buoyGui_ConditionDropDown_on_gui_selection_state_changed(e)
-end
-script.on_event(defines.events.on_gui_selection_state_changed, on_gui_selection_state_changed_handler)
-
-local on_gui_click_handler = function (e)
-  boatGui_ConditionAdd_on_gui_click(e)
-  boatGui_ConditionButtons_on_gui_click(e)
-end
-script.on_event(defines.events.on_gui_click, on_gui_click_handler)
-
-local on_gui_text_changed_handler = function(e)
-  boatGui_ConditionNumber_on_gui_text_changed(e)
-  dockGui_ConditionNumber_on_gui_text_changed(e)
-end
-script.on_event(defines.events.on_gui_text_changed, on_gui_text_changed_handler)
-
-local on_pre_player_mined_item_handler = function(e)
-
-end
-script.on_event(defines.events.on_pre_player_mined_item, on_pre_player_mined_item_handler)
+end)
