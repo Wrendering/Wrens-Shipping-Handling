@@ -19,117 +19,17 @@ if global.boatsList == nil then global.boatsList = {} end
 if global.boatsList_signalOrdered == nil then global.boatsList_signalOrdered = {} end
 if global.lighthousesList == nil then global.lighthousesList = {} end
 if global.lighthousesList_signalOrdered == nil then global.lighthousesList_signalOrdered = {} end
-if global.docksList == nil then global.docksList = {} end
 if global.buoysList == nil then global.buoysList = {} end
 
-local BEACON_RADIUS = 15 --game.entity_prototypes["lighthouse-entity"].supply_area_distance
-local BUOY_RADIUS = 1
-local DOCK_RADIUS = 1
+BEACON_RADIUS = 15 --game.entity_prototypes["lighthouse-entity"].supply_area_distance
+BUOY_RADIUS = 1
+DOCK_RADIUS = 1
 
 ------------------------------------------------ Dock Placement
-
-
-APIInterface.registerFunction("on_built_entity",  function (e)
-  if e.created_entity.valid and e.created_entity.name == "dock-entity" then
-    if next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.left_top.x - 1, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.left_top.x, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"water-tile",}, })) ~= nil then
-      game.players[e.player_index].print("ERROR: Dock must be placed with back to land.")
-    elseif next(e.created_entity.surface.find_tiles_filtered({area = { {e.created_entity.bounding_box.right_bottom.x, e.created_entity.bounding_box.left_top.y}, {e.created_entity.bounding_box.right_bottom.x + 1, e.created_entity.bounding_box.right_bottom.y}}, collision_mask = {"ground-tile",}, })) ~= nil then
-      game.players[e.player_index].print("ERROR: Dock must be placed with front to water.")
-    else
-      return
-    end
-    game.players[e.player_index].insert(e.stack)
-    e.created_entity.destroy()
-  end
-end)
-
-
-APIInterface.registerFunction("on_built_entity", function(e)
-  if e.created_entity.valid and e.created_entity.name == "dock-entity" then
-    local docksList = global.docksList
-    local dock = e.created_entity
-    docksList[dock.unit_number] = { signal = nil, condition = 1, lighthouses = {}, entity = dock, }
-    local lighthouses = dock.surface.find_entities_filtered({area={ left_top = {dock.position.x - (BEACON_RADIUS + 1 + DOCK_RADIUS), dock.position.y - (BEACON_RADIUS + 1 + DOCK_RADIUS) }, right_bottom = {dock.position.x + (BEACON_RADIUS + 1 + DOCK_RADIUS), dock.position.y + (BEACON_RADIUS + 1 + DOCK_RADIUS) }}, name = "lighthouse-entity" })
-    local lighthousesList = global.lighthousesList
-    for _,i in pairs(lighthouses) do
-      docksList[dock.unit_number].lighthouses[i.unit_number] = true
-      lighthousesList[i.unit_number].docksList[dock.unit_number] = true
-    end
-  end
-end)
-
-APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
-  if e.entity.name == "dock-entity" then
-    local docksList = global.docksList
-    local lighthousesList = global.lighthousesList
-    for i,_ in pairs(docksList[e.entity.unit_number].lighthouses) do
-      lighthousesList[i].docksList[e.entity.unit_number] = nil
-    end
-    docksList[e.entity.unit_number] = nil
-
-  end
-end)
 
 ------------------------------------------------ Buoy Placement and Registration
 
 --buoyPlacement_updateCheck, buoyPlacement_updateEntity
-
-local buoyTypesList_entity = {[1] = "incoming-buoy-entity", [2] = "outgoing-buoy-entity", [3] = "signal-buoy-entity"}
-
-
-APIInterface.registerFunction("on_built_entity", function (e)
-  if e.created_entity.valid and string.find(e.created_entity.name, "buoy%-entity") ~= nil then
-    global.buoysList[e.created_entity.unit_number] = {entity = e.created_entity, active_state = 1} --1 = "incoming", 2 = "outgoing", 3 = "signal"
-    buoyPlacement_updateCheck(e.created_entity)
-  end
-end)
-
-buoyPlacement_updateCheck = function(buoy, buoy_type_index)
-  --buoy_type_index is an optional argument
-
-  local lighthouses = buoy.surface.find_entities_filtered({area={ left_top = {buoy.position.x - (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y - (BEACON_RADIUS + BUOY_RADIUS) }, right_bottom = {buoy.position.x + (BEACON_RADIUS + BUOY_RADIUS), buoy.position.y + (BEACON_RADIUS + BUOY_RADIUS) }}, name = "lighthouse-entity" })
-  local lighthousesList = global.lighthousesList
-
-  for _,i in pairs(lighthouses) do
-    lighthousesList[i.unit_number].buoysList[buoy.unit_number] = nil
-  end
-
-  local new_buoy = buoyPlacement_updateEntity({ buoy = buoy, within_range = (next(lighthouses) ~= nil), buoy_type = (buoy_type_index and buoyTypesList_entity[buoy_type_index]) })
-
-  for _,i in pairs(lighthouses) do
-    lighthousesList[i.unit_number].buoysList[new_buoy.unit_number] = {entity = new_buoy, distance = (new_buoy.position.x - i.position.x)^2 + (new_buoy.position.y - i.position.y)^2 }
-  end
-
-  return new_buoy
-end
-
-buoyPlacement_updateEntity = function(arg)
-  -- Required: buoy
-  -- Optional: within_range, buoy_type
-  arg.buoy_type = arg.buoy_type or buoyTypesList_entity[global.buoysList[arg.buoy.unit_number].active_state]
-  arg.within_range = arg.within_range or false
-
-  local buoy = arg.buoy
-  local new_buoy
-  local buoysList = global.buoysList
-
-  if arg.within_range then
-    new_buoy = buoy.surface.create_entity({name=arg.buoy_type, position = buoy.position, force = buoy.force})
-    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
-    buoysList[buoy.unit_number] = nil
-  else
-    new_buoy = buoy.surface.create_entity({name="disabled-buoy-entity", position = buoy.position, force = buoy.force})
-    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
-    buoysList[buoy.unit_number] = nil
-  end
-  buoysList[new_buoy.unit_number].entity = new_buoy
-  buoy.destroy()
-  return new_buoy
-end
-
--- So buoys: each lighthouse has a buoyList. Default color of buoys is grey, they change color on_lighthouse_placement or on_buoy_placement, they're returned that way on_lighthouse_destruction IF not covered by anything
---
-
 ----------------------------------------------------------- Boat Beacon Checking
 
 APIInterface.registerFunction("on_tick", function(e)
@@ -268,17 +168,18 @@ end)
 APIInterface.registerFunction("on_built_entity", function (e)
   if e.created_entity.valid and e.created_entity.name == "lighthouse-entity" then
     local lighthouse = e.created_entity
-    local lighthousesList = global.lighthousesList
+    local lighthousesList = global.lighthousesList --global.lists["lighthouse"]
+    local buoysList = global.lists["buoy"]
     lighthousesList[lighthouse.unit_number] =  { entity = e.created_entity, signal = nil, buoysList = {}, docksList = {} }
     local lighthouseData = lighthousesList[lighthouse.unit_number]
 
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS+1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     for _,i in pairs(buoys) do
-      if i.name == "disabled-buoy-entity" then i = buoyPlacement_updateEntity({buoy = i, within_range = true, }) end
+      if i.name == "disabled-buoy-entity" then buoysList[i]:updateEntity({within_range = true, }) end
       lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
     end
 
-    local docksList = global.docksList
+    local docksList = global.lists["dock-entity"]
     local docks = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + 1 + DOCK_RADIUS), lighthouse.position.y - (BEACON_RADIUS + 1 + DOCK_RADIUS) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + 1 + DOCK_RADIUS), lighthouse.position.y + (BEACON_RADIUS + 1 + DOCK_RADIUS) }}, name = "dock-entity" })
     for _,i in pairs(docks) do
       docksList[i.unit_number].lighthouses[lighthouse.unit_number] = true
@@ -316,6 +217,7 @@ APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, func
 
     local lighthouse = e.entity
     local lighthousesList = global.lighthousesList
+    local buoysList = global.lists["buoy"]
     local lighthouses = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }, right_bottom = {lighthouse.position.x + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }}, name = "lighthouse-entity"  })
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS + 1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS + 1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     local bool = false
@@ -330,11 +232,11 @@ APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, func
         end
       end
       if bool then
-        buoyPlacement_updateEntity({buoy = i, within_range = false})
+        buoysList[i.unit_number]:updateEntity({within_range = false})
       end
     end
 
-    local docksList = global.docksList
+    local docksList = global.lists["dock-entity"]
     local docks = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + 1+1), lighthouse.position.y - (BEACON_RADIUS + 1+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + 1+1), lighthouse.position.y + (BEACON_RADIUS + 1+1) }}, name = "dock-entity" })
     for _,i in pairs(docks) do
       --note that the relevant entry might not actually already exist
@@ -347,7 +249,11 @@ end)
 
 ------------------------------
 require("scripts/OceanModifier")
+
 require("scripts/GUI/BoatGUI")
 require("scripts/GUI/DockGUI")
 require("scripts/GUI/BuoyGUI")
 require("scripts/GUI/LighthouseGUI")
+
+require("scripts/Entity/Dock")
+require("scripts/Entity/Buoy")
