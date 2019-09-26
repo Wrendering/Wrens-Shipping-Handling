@@ -1,5 +1,5 @@
 {
-	"name": "OceanDawn",
+	"name": "WrensShippingHandling",
 	"version": "0.1.0",
 	"title": "Wren's Ocean Exploration",
 	"author": "wrendering",
@@ -9,4 +9,3 @@
 	"dependencies": ["base >= 0.17"],
 	"description": "to do"
 }
-

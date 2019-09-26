@@ -1,21 +1,22 @@
 local APIInterface = require("scripts/APIInterface")
 
 local Entity = require("Entity")
-local Buoy = Entity:new{entity = nil}
+local Buoy = Entity:new{entity = nil, active_state = nil}
 
 Buoy.buoyTypesList_entity = {[1] = "incoming-buoy-entity", [2] = "outgoing-buoy-entity", [3] = "signal-buoy-entity"}
 
 function Buoy:new(args)
   -- Note: args._buoyPlacementLock is a thing. Don't use it outside of this class, please.
-  log(args.entity.unit_number)
   args.className = "buoy-entity"
   local newObject = getmetatable(self):new(args)
   setmetatable(newObject, self)
   self.__index = self
 
+  newObject.active_state = args.active_state
+
   if args._buoyPlacementLock == nil then
-    newObject = newObject:updateCheck()
-    newObject.active_state = 1
+    newObject.active_state = newObject.active_state or 1
+    newObject = newObject:updateEntityWithChecks()
   end
 
   return newObject
@@ -27,49 +28,57 @@ APIInterface.registerFunction("on_built_entity", function(e)
   end
 end)
 
-function Buoy:updateCheck(buoy_type_index)
+function Buoy:updateEntityWithChecks(args)
+  -- args.buoy_type_index *optional* -- keeps to current active state otherwise
+  -- args.not_within_range *optional* -- set to 'true' to skip lighthouse checks/updates
   -- Replace this buoy with a new one; update all relevant buoysLists to new unit_number
-  -- buoy_type_index is an optional argument
+  args = args or {}
+  local new_buoy
+  if args.not_within_range == nil then
+    local location = self.entity.position
+    local lighthousesList = global.lighthousesList
+    local radius = (BEACON_RADIUS + BUOY_RADIUS)
 
-  local buoy_type = (buoy_type_index and buoyTypesList_entity[buoy_type_index])
-  local location = self.entity.position
-  local lighthousesList = global.lighthousesList
-  local radius = (BEACON_RADIUS + BUOY_RADIUS)
+    local lighthouses = self.entity.surface.find_entities_filtered({area={ left_top = {location.x - radius, location.y - radius }, right_bottom = {location.x + radius, location.y + radius }}, name = "lighthouse-entity" })
+    new_buoy = self:updateEntityRaw({within_range = (next(lighthouses) ~= nil), buoy_type_index = args.buoy_type_index })
 
-  local lighthouses = self.entity.surface.find_entities_filtered({area={ left_top = {location.x - radius, location.y - radius }, right_bottom = {location.x + radius, location.y + radius }}, name = "lighthouse-entity" })
+    local new_buoy_entity = new_buoy.entity
+    for _,i in pairs(lighthouses) do
+      log(tostring( lighthousesList ))
+      log(tostring( i ))
+      log(tostring( i.unit_number ))
+      log(tostring( lighthousesList[i.unit_number] ))
+      log(tostring( lighthousesList[i.unit_number].buoysList ))
+      log(tostring( new_buoy_entity ))
+      log(tostring( new_buoy_entity.unit_number ))
+      log(tostring( lighthousesList[i.unit_number].buoysList[new_buoy_entity.unit_number] ))
 
-  local new_buoy = self:updateEntity({within_range = (next(lighthouses) ~= nil), buoy_type = buoy_type })
-  local new_buoy_entity = new_buoy.entity
-  for _,i in pairs(lighthouses) do
-    lighthousesList[i.unit_number].buoysList[new_buoy_entity.unit_number] = {entity = new_buoy_entity, distance = (new_buoy_entity.position.x - i.position.x)^2 + (new_buoy_entity.position.y - i.position.y)^2 }
+      lighthousesList[i.unit_number].buoysList[new_buoy_entity.unit_number] = {entity = new_buoy_entity, distance = (new_buoy_entity.position.x - i.position.x)^2 + (new_buoy_entity.position.y - i.position.y)^2 }
+    end
+  else
+    new_buoy = self:updateEntityRaw({within_range = false, buoy_type_index = args.buoy_type_index })
   end
 
   return new_buoy
 end
 
-function Buoy:updateEntity(arg)
-  -- Optional: within_range, buoy_type
+function Buoy:updateEntityRaw(args)
+  -- Optional: within_range, buoy_type_index
+
+  args.within_range = args.within_range or false
+  local active_state = args.buoy_type_index or self.active_state
 
   local buoy = self.entity
+
   local new_buoy
-  local buoysList = global.lists["buoy-entity"]
-
-  arg.buoy_type = arg.buoy_type or Buoy.buoyTypesList_entity[self.active_state]
-  arg.within_range = arg.within_range or false
-
-  if arg.within_range then
-    new_buoy = buoy.surface.create_entity({name=arg.buoy_type, position = buoy.position, force = buoy.force})
-    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
-    buoysList[buoy.unit_number] = nil
+  if args.within_range then
+    new_buoy = buoy.surface.create_entity({name=Buoy.buoyTypesList_entity[active_state], position = buoy.position, force = buoy.force})
   else
     new_buoy = buoy.surface.create_entity({name="disabled-buoy-entity", position = buoy.position, force = buoy.force})
-    buoysList[new_buoy.unit_number] = buoysList[buoy.unit_number]
-    buoysList[buoy.unit_number] = nil
   end
-  buoysList[new_buoy.unit_number].entity = new_buoy
 
-  self:destroy()
-  new_buoy_object = Buoy:new{_buoyPlacementLock = true, entity = new_buoy }
+  if self.entity.unit_number ~= new_buoy.unit_number then self:destroy() end
+  new_buoy_object = Buoy:new{_buoyPlacementLock = true, entity = new_buoy, active_state = active_state }
   return new_buoy_object
 end
 

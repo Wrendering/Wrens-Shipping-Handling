@@ -169,14 +169,14 @@ APIInterface.registerFunction("on_built_entity", function (e)
   if e.created_entity.valid and e.created_entity.name == "lighthouse-entity" then
     local lighthouse = e.created_entity
     local lighthousesList = global.lighthousesList --global.lists["lighthouse"]
-    local buoysList = global.lists["buoy"]
+    local buoysList = global.lists["buoy-entity"]
     lighthousesList[lighthouse.unit_number] =  { entity = e.created_entity, signal = nil, buoysList = {}, docksList = {} }
     local lighthouseData = lighthousesList[lighthouse.unit_number]
 
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS+1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS+1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS+1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     for _,i in pairs(buoys) do
-      if i.name == "disabled-buoy-entity" then buoysList[i]:updateEntity({within_range = true, }) end
-      lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
+      buoysList[i.unit_number]:updateEntityWithChecks()
+      --lighthouseData.buoysList[i.unit_number] = {entity = i, distance = (lighthouse.position.x - i.position.x)^2 + (lighthouse.position.y - i.position.y)^2}
     end
 
     local docksList = global.lists["dock-entity"]
@@ -192,11 +192,6 @@ end)
 APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
   if e.entity.name == "lighthouse-entity" then
     local lostSignal = global.lighthousesList[e.entity.unit_number].signal
-    if lostSignal ~= nil then
-      global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
-      if next(global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
-    end
-    global.lighthousesList[e.entity.unit_number] = nil
 
     local boatData = nil
     local tempResult = nil
@@ -217,7 +212,7 @@ APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, func
 
     local lighthouse = e.entity
     local lighthousesList = global.lighthousesList
-    local buoysList = global.lists["buoy"]
+    local buoysList = global.lists["buoy-entity"]
     local lighthouses = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y - ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }, right_bottom = {lighthouse.position.x + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2), lighthouse.position.y + ((BEACON_RADIUS+BUOY_RADIUS+1) * 2) }}, name = "lighthouse-entity"  })
     local buoys = lighthouse.surface.find_entities_filtered({area={ left_top = {lighthouse.position.x - (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y - (BEACON_RADIUS + BUOY_RADIUS + 1) }, right_bottom = {lighthouse.position.x + (BEACON_RADIUS + BUOY_RADIUS + 1), lighthouse.position.y + (BEACON_RADIUS + BUOY_RADIUS + 1) }}, name = {"incoming-buoy-entity", "outgoing-buoy-entity", "signal-buoy-entity", "disabled-buoy-entity" }  })
     local bool = false
@@ -232,7 +227,7 @@ APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, func
         end
       end
       if bool then
-        buoysList[i.unit_number]:updateEntity({within_range = false})
+        buoysList[i.unit_number]:updateEntityWithChecks({not_within_range = true})
       end
     end
 
@@ -243,6 +238,12 @@ APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, func
       docksList[i.unit_number].lighthouses[lighthouse.unit_number] = nil
       --don't need to clear the lighthouse' dockList -- the lighthouse is gone
     end
+
+    if lostSignal ~= nil then
+      global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name][e.entity.unit_number] = nil
+      if next(global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name]) == nil then global.lighthousesList_signalOrdered[lostSignal.type..lostSignal.name] = nil end
+    end
+    global.lighthousesList[e.entity.unit_number] = nil
 
   end
 end)

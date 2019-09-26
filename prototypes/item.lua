@@ -33,13 +33,13 @@ local dock_entity = {
   icon_size = 32,
 
   base_picture = {
-    filename = "__OceanDawn__/graphics/entity/dock/bad_dock.png",
+    filename = "__WrensShippingHandling__/graphics/entity/dock/bad_dock.png",
     width = 64,
     height = 96,
     shift = { 0.0, 0.0},
   },
   animation = {
-    filename = "__OceanDawn__/graphics/entity/dock/bad_dock.png",
+    filename = "__WrensShippingHandling__/graphics/entity/dock/bad_dock.png",
     width = 64 ,
     height = 96,
     --line_length = 1,
@@ -48,7 +48,7 @@ local dock_entity = {
     --animation_speed = 0.5,
   },
   animation_shadow = {
-    filename = "__OceanDawn__/graphics/entity/dock/bad_dock_shadow.png",
+    filename = "__WrensShippingHandling__/graphics/entity/dock/bad_dock_shadow.png",
     width = 35,
     height = 30,
     --line_length = 1,
