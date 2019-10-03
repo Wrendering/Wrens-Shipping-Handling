@@ -36,7 +36,7 @@ function Buoy:updateEntityWithChecks(args)
   local new_buoy
   if args.not_within_range == nil then
     local location = self.entity.position
-    local lighthousesList = global.lighthousesList
+    local lighthousesList = global.lists["lighthouse-entity"]
     local radius = (BEACON_RADIUS + BUOY_RADIUS)
 
     local lighthouses = self.entity.surface.find_entities_filtered({area={ left_top = {location.x - radius, location.y - radius }, right_bottom = {location.x + radius, location.y + radius }}, name = "lighthouse-entity" })
@@ -44,15 +44,6 @@ function Buoy:updateEntityWithChecks(args)
 
     local new_buoy_entity = new_buoy.entity
     for _,i in pairs(lighthouses) do
-      log(tostring( lighthousesList ))
-      log(tostring( i ))
-      log(tostring( i.unit_number ))
-      log(tostring( lighthousesList[i.unit_number] ))
-      log(tostring( lighthousesList[i.unit_number].buoysList ))
-      log(tostring( new_buoy_entity ))
-      log(tostring( new_buoy_entity.unit_number ))
-      log(tostring( lighthousesList[i.unit_number].buoysList[new_buoy_entity.unit_number] ))
-
       lighthousesList[i.unit_number].buoysList[new_buoy_entity.unit_number] = {entity = new_buoy_entity, distance = (new_buoy_entity.position.x - i.position.x)^2 + (new_buoy_entity.position.y - i.position.y)^2 }
     end
   else
@@ -83,7 +74,7 @@ function Buoy:updateEntityRaw(args)
 end
 
 function Buoy:destroy()
-  local lighthousesList = global.lists["lighthouse"]
+  local lighthousesList = global.lists["lighthouse-entity"]
   local unit_number = self.entity.unit_number
 
   if self.lighthouses ~= nil then
@@ -96,7 +87,7 @@ function Buoy:destroy()
 end
 
 APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
-  if string.find(e.entity.name, "buoy%-entity") then
+  if e.entity.valid and string.find(e.entity.name, "buoy%-entity") then
     global.lists["buoy-entity"][e.entity.unit_number]:destroy()
   end
 end)

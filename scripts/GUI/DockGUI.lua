@@ -34,11 +34,11 @@ dockGUI.conditionHandler_on_gui_text_changed = function(e)
   if e.element.valid and e.element.name == "dock_conditionpicker" then
     local gui_base = game.players[e.player_index].gui.top["dock_frame"]
     local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
-    local dockData = global.lists["dock-entity"][dock_unit_number]
+    local dock = global.lists["dock-entity"][dock_unit_number]
 
     if tonumber(e.element.text, 10) == 0 then e.element.text = 1 end
 
-    dockData.conditionIndex = tonumber(e.element.text,10)
+    dock.conditionIndex = tonumber(e.element.text,10)
   end
 end
 APIInterface.registerFunction("on_gui_text_changed", dockGUI.conditionHandler_on_gui_text_changed)
@@ -48,9 +48,9 @@ dockGUI.signalHandler_on_gui_elem_changed = function (e)
   if e.element.valid and e.element.name == "dock_signalpicker" then
     local gui_base = game.players[e.player_index].gui.top["dock_frame"]
     local _, dock_unit_number = next(gui_base.dock_id.children_names) dock_unit_number = tonumber(dock_unit_number, 10)
-    local dockData = global.lists["dock-entity"][dock_unit_number]
+    local dock = global.lists["dock-entity"][dock_unit_number]
 
-    dockData.signal = e.element.elem_value
+    dock:setSignal{signal = e.element.elem_value}
   end
 end
 APIInterface.registerFunction("on_gui_elem_changed", dockGUI.signalHandler_on_gui_elem_changed)

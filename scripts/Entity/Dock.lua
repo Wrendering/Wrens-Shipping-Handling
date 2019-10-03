@@ -1,14 +1,10 @@
---
---global = {}
---
-
-local PIInterface = require("scripts/APIInterface")
+local APIInterface = require("scripts/APIInterface")
 
 local Entity = require("Entity")
-
-local Dock = Entity:new{entity = nil}
+local Dock = Entity:new{entity = nil, signalType = true, signal = nil, condition = 1, lighthouses = {} }
 
 function Dock:new(args)
+  args.signalType = true
   local newObject = getmetatable(self):new(args)
   setmetatable(newObject, self)
   self.__index = self
@@ -19,7 +15,7 @@ function Dock:new(args)
 
   local location = newObject.entity.position
   local radius = BEACON_RADIUS + 1 + DOCK_RADIUS
-  local lighthousesList = global.lighthousesList
+  local lighthousesList = global.lists["lighthouse-entity"]
 
   local lighthouses = newObject.entity.surface.find_entities_filtered({area={ left_top = {location.x - radius, location.y - radius }, right_bottom = {location.x + radius, location.y + radius }}, name = "lighthouse-entity" })
   for _,i in pairs(lighthouses) do
@@ -55,7 +51,7 @@ APIInterface.registerFunction("on_built_entity", Dock.checkPlacement)
 
 
 function Dock:destroy()
-  local lighthousesList = global.lighthousesList
+  local lighthousesList = global.lists["lighthouse-entity"]
   local unit_number = self.entity.unit_number
 
   for i,_ in pairs(self.lighthouses) do
@@ -66,8 +62,24 @@ function Dock:destroy()
 end
 
 APIInterface.registerFunction({"on_entity_died", "on_player_mined_entity"}, function (e)
-  if e.entity.name == "dock-entity" then
+  if e.entity.valid and e.entity.name == "dock-entity" then
     global.lists["dock-entity"][e.entity.unit_number]:destroy()
   end
 end)
---]]--
+
+function Dock:setSignal(args)
+  --Args: signal = new signal
+  local dockSignalLists = global.signalLists["dock-entity"]
+
+  if self.signal ~= nil then
+    dockSignalLists[self.signal.type..self.signal.name][self.entity.unit_number] = nil
+    if next(dockSignalLists[self.signal.type..self.signal.name]) == nil then dockSignalLists[self.signal.type..self.signal.name] = nil end
+  end
+
+  self.signal = args.signal
+
+  if args.signal ~= nil then
+    if dockSignalLists[args.signal.type..args.signal.name] == nil then dockSignalLists[args.signal.type..args.signal.name] = {} end
+    dockSignalLists[args.signal.type..args.signal.name][self.entity.unit_number] = true
+  end
+end
